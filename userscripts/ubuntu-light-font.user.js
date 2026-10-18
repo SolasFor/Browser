@@ -10,25 +10,31 @@
 // @grant        GM_addStyle
 // ==/UserScript==
 
-(function () {
-  'use strict';
+(function() {
+    'use strict';
 
-  GM_addStyle(`
-    @font-face {
-      font-family: "Ubuntu Light Custom";
-      src: url("https://solasfor.github.io/Browser/fonts/Ubuntu%20Light.woff2") format("woff2");
-      font-weight: 300;
-      font-style: normal;
-      font-display: swap;
-    }
+    const css = `
+        @font-face {
+            font-family: "Ubuntu Light Custom";
+            /* Ссылка на GitHub Pages, который отдаёт правильные CORS-заголовки */
+            src: url("https://solasfor.github.io/Scripts-for-browser/Ubuntu%20Light.woff2") format("woff2");
+            font-weight: 300;
+            font-style: normal;
+            font-display: swap;
+        }
 
-    body,
-    button,
-    input,
-    textarea,
-    select {
-      font-family: "Ubuntu Light Custom", system-ui, sans-serif !important;
-      font-weight: 300 !important;
+        /* Применяем шрифт ко всему, кроме иконок и кода */
+        *:not([class*="icon"]):not([class*="fa-"]):not(i):not(svg):not(code):not(pre) {
+            font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif !important;
+            font-weight: 300 !important;
+        }
+    `;
+
+    if (typeof GM_addStyle !== 'undefined') {
+        GM_addStyle(css);
+    } else {
+        const style = document.createElement('style');
+        style.textContent = css;
+        document.documentElement.appendChild(style);
     }
-  `);
 })();
