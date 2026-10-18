@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Browser Customization</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: #e8eaed;
+      background: #0f0f0f;
+      background-image: radial-gradient(circle at 15% 10%, #1b3a5d44, transparent 35%), radial-gradient(circle at 90% 85%, #3d245244, transparent 32%);
+    }
+    main { width: min(960px, calc(100% - 40px)); margin: 0 auto; padding: 88px 0; }
+    .eyebrow { color: #7db7ff; letter-spacing: .14em; text-transform: uppercase; font-size: .75rem; font-weight: 700; }
+    h1 { margin: 14px 0 16px; font-size: clamp(2.5rem, 7vw, 5.5rem); line-height: .98; letter-spacing: -.06em; }
+    .intro { max-width: 650px; color: #aeb4be; font-size: 1.12rem; line-height: 1.7; }
+    section { margin-top: 64px; }
+    h2 { font-size: 1.45rem; margin: 0 0 18px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+    .card { padding: 24px; border: 1px solid #ffffff18; border-radius: 18px; background: #181818cc; box-shadow: 0 18px 50px #00000035; }
+    .card h3 { margin: 0 0 8px; font-size: 1.08rem; }
+    .card p { margin: 0 0 22px; color: #aeb4be; line-height: 1.55; }
+    a.button { display: inline-block; padding: 11px 16px; border-radius: 10px; color: white; text-decoration: none; font-weight: 700; background: linear-gradient(135deg, #2878e8, #6947d9); transition: transform .2s, filter .2s; }
+    a.button:hover { transform: translateY(-2px); filter: brightness(1.15); }
+    footer { margin-top: 70px; color: #777d87; font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="eyebrow">SolasFor / Browser</div>
+    <h1>Browser<br>Customization</h1>
+    <p class="intro">A focused collection of Violentmonkey userscripts and Firefox CSS mods for a cleaner, more personal browsing experience.</p>
+
+    <section aria-labelledby="userscripts-title">
+      <h2 id="userscripts-title">Userscripts</h2>
+      <div class="grid">
+        <article class="card">
+          <h3>YouTube Tweaks</h3>
+          <p>Small interface improvements for YouTube, installed through Violentmonkey.</p>
+          <a class="button" href="userscripts/youtube-tweaks.user.js">Install script</a>
+        </article>
+        <article class="card">
+          <h3>Ubuntu Light Font</h3>
+          <p>Loads Ubuntu Light for a lighter, more refined typography experience.</p>
+          <a class="button" href="userscripts/ubuntu-light-font.user.js">Install script</a>
+        </article>
+      </div>
+    </section>
+
+    <section aria-labelledby="firefox-title">
+      <h2 id="firefox-title">Firefox Customization</h2>
+      <div class="card">
+        <h3>Firefox-Mod-Blur collection</h3>
+        <p>Customizable chrome and content styles based on the Firefox-Mod-Blur theme.</p>
+        <a class="button" href="firefox-customization/README.md">Read installation guide</a>
+      </div>
+    </section>
+    <footer>Built for Firefox and Violentmonkey.</footer>
+  </main>
+</body>
+</html>

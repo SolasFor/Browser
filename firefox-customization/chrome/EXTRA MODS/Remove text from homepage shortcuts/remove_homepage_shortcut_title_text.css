@@ -1,0 +1,13 @@
+/*  Remove text from homepage/newtab website shortcuts. */
+/*  Check if pinned by using context menu.             */
+@-moz-document url("about:home"),
+url("about:newtab") {
+     #root .top-site-inner .title{
+        display: none !important;
+     }
+
+
+     #root .top-sites-list .top-site-outer {
+        padding: 8px 0 16px 0 !important;
+     }
+}

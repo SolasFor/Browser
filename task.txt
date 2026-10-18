@@ -1,0 +1,85 @@
+# Задача: Объединение и настройка GitHub-репозитория SolasFor/Browser
+
+Ты — Senior Frontend Developer и эксперт по кастомизации Firefox. Мы работаем с GitHub-репозиторием `SolasFor/Browser` (https://github.com/SolasFor/Browser). Твоя задача — сгенерировать файлы и структуру для этого репозитория, чтобы затем я мог сделать коммит и пуш.
+
+В репозитории должны быть скрипты для Violentmonkey, файлы шрифтов и CSS-моды для Firefox, основанные на теме `datguypiko/Firefox-Mod-Blur`.
+
+## 1. Структура проекта (в корне GitHub-репозитория)
+Создай следующую структуру папок и файлов:
+
+Browser/
+├── README.md
+├── index.html
+├── userscripts/
+│   ├── youtube-tweaks.user.js
+│   └── ubuntu-light-font.user.js
+├── fonts/
+│   └── (здесь будет лежать Ubuntu Light.woff2)
+└── firefox-customization/
+    ├── README.md
+    ├── chrome/
+    │   ├── userChrome.css
+    │   ├── userContent.css
+    │   ├── cleaner_extensions_menu.css
+    │   ├── colored_soundplaying_tab.css
+    │   ├── icons_in_main_menu.css
+    │   ├── menu_icon_change_to_firefox.css
+    │   ├── min-max-close_buttons.css
+    │   ├── only_show_list-all-tabs_when_tabs.css
+    │   ├── remove_folder_icons_from_bookmarks.css
+    │   ├── thin_scrollbar_windows10.css
+    │   ├── ublock-icon-change.css
+    │   └── white_github_icon_in_bookmarks.css
+    ├── ASSETS/
+    └── EXTRA MODS/
+
+## 2. Инструкции по созданию файлов для GitHub
+
+### 2.1. Корневой README.md
+Опиши проект для главной страницы GitHub. Укажи, что userscripts — это скрипты для Violentmonkey (YouTube Tweaks и Ubuntu Light Font), а firefox-customization — CSS-моды для Firefox (на основе темы Firefox-Mod-Blur). Добавь markdown-ссылки на прямые установки скриптов через `raw.githubusercontent.com`.
+
+### 2.2. Корневой index.html
+Создай красивую страницу для GitHub Pages (тёмная тема: фон #0f0f0f, текст #e8eaed). 
+- Заголовок: "Browser Customization".
+- Раздел "Userscripts" с кнопками (синий градиент) на userscripts/youtube-tweaks.user.js и userscripts/ubuntu-light-font.user.js.
+- Раздел "Firefox Customization" со ссылкой на firefox-customization/README.md.
+
+### 2.3. userscripts/youtube-tweaks.user.js
+Обнови шапку скрипта (это файл userscript для Violentmonkey):
+- @updateURL и @downloadURL должны вести на https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/youtube-tweaks.user.js
+Внутри CSS-стилей (в GM_addStyle), в блоке @font-face замени ссылку на:
+src: url("https://solasfor.github.io/Browser/fonts/Ubuntu%20Light.woff2") format("woff2");
+
+### 2.4. userscripts/ubuntu-light-font.user.js
+Сделай то же самое: обнови @updateURL/@downloadURL (добавь /userscripts/) и ссылку на шрифт в @font-face.
+
+### 2.5. firefox-customization/README.md
+Напиши подробную инструкцию по установке модов для Firefox (основанную на документации Firefox-Mod-Blur):
+1. В about:config установить toolkit.legacyUserProfileCustomizations.stylesheets в true.
+2. В about:support найти папку профиля и открыть её.
+3. Создать папку chrome (если нет) и скопировать туда файлы из папки firefox-customization/chrome/ этого репозитория.
+4. Скопировать нужные дополнительные .css файлы из EXTRA MODS в ту же папку.
+
+ВАЖНО: Дополнительные настройки about:config
+Добавь раздел с настройками about:config (с указанием типа Boolean или Number) для активации функций:
+- Extension menu changes: (Убедись, что в userChrome.css импортируется cleaner_extensions_menu.css).
+- More compact Vertical Tabs: mod.compact.vertical.tabs (Boolean = true).
+- Hide scrollbar when Vertical tabs overflow: mod.disable.scrollbar.in.vertical.tabs (Boolean = true).
+- Window Frame border mods: mod.main.window.frame.style-1 (Boolean = true).
+- Experimental: Extra Blur mods: mod.combined.extra.blur (Boolean = true).
+- Wallpaper Blur in New tab page: mod.new-tab.background.blur (Number = от 1 до 10, по умолчанию 4).
+- Card Style theme: mod.card-theme.style.1 (Boolean = true).
+
+### 2.6. firefox-customization/chrome/userChrome.css
+Создай файл, который импортирует все 10 файлов модов (включая cleaner_extensions_menu.css) через @import url("...");
+
+### 2.7. Заглушки для CSS-модов (10 файлов)
+Создай пустые файлы в папке firefox-customization/chrome/ (перечисли все 10 штук). В каждый добавь комментарий: /* Мод: [Название мода] */
+
+### 2.8. firefox-customization/chrome/userContent.css
+Создай пустой файл с комментарием: /* Стили для внутренних страниц Firefox */
+
+## 3. Формат ответа и Git-команды
+Выведи результат пошагово. Сначала создай структуру папок, затем выдавай содержимое каждого файла в блоке кода с указанием полного пути (например, `userscripts/youtube-tweaks.user.js`).
+
+В конце сгенерируй список Git-команд (git add ., git commit -m "...", git push), которые я смогу выполнить в терминале, чтобы залить всё это в репозиторий SolasFor/Browser.
