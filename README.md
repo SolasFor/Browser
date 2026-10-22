@@ -17,6 +17,11 @@
 
 Инструкции по установке: [`firefox-customization/README.md`](firefox-customization/README.md).
 
+## 3D Demo
+
+- [Interactive 3D Aquarium](Akvarium/Aquarium.html) — интерактивный 3D-аквариум на Three.js со стайным поведением рыб, кормлением, каустикой и сменой освещения.
+- [Four-Stroke ICE — Interactive Exploded View](Engin/Engin.html) — интерактивная модель 4-тактного двигателя с пошаговой разборкой и сборкой на Three.js.
+
 ## GitHub Pages
 
 Стартовая страница проекта доступна в [`index.html`](index.html).
