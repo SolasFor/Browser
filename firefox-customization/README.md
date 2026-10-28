@@ -43,7 +43,7 @@
 | [`colored_soundplaying_tab.css`](chrome/colored_soundplaying_tab.css) | Подсвечивает фоном неактивную вкладку, в которой воспроизводится звук. Цвет задаётся переменной `--firefoxcss-colored-sound-tab`. | — |
 | [`icons_in_main_menu.css`](chrome/icons_in_main_menu.css) | Добавляет значки к пунктам главного меню Firefox. | — |
 | [`menu_icon_change_to_firefox.css`](chrome/menu_icon_change_to_firefox.css) | Заменяет значок главного меню логотипом Firefox; предусмотрены варианты для светлой, тёмной и приватной темы. | — |
-| [`min-max-close_buttons.css`](chrome/min-max-close_buttons.css) | Оформляет кнопки сворачивания, разворачивания и закрытия окна в стиле macOS и размещает их рядом с панелью вкладок. | — |
+| [`right-min-max-close_buttons.css`](chrome/min-max-close_buttons.css) | Оформляет кнопки сворачивания, разворачивания и закрытия окна в стиле macOS и размещает их справа на панели вкладок. | — |
 | [`only_show_list-all-tabs_when_tabs_overflowing.css`](chrome/only_show_list-all-tabs_when_tabs_overflowing.css) | Показывает кнопку списка всех вкладок только тогда, когда вкладки не помещаются в панели. | — |
 | [`remove_folder_icons_from_bookmarks.css`](chrome/remove_folder_icons_from_bookmarks.css) | Скрывает значки папок на панели закладок, оставляя названия. | — |
 | [`thin_scrollbar_windows10.css`](chrome/thin_scrollbar_windows10.css) | Делает полосы прокрутки тоньше. В комментарии к файлу указано, что он ориентирован на Windows 10; на других системах результат может отличаться. | — |
