@@ -23,7 +23,7 @@
 
 ## GitHub Pages
 
-Стартовая страница проекта: [index.html](index.html).
+Стартовая страница проекта: [открыть сайт на GitHub Pages](https://solasfor.github.io/Browser/). Исходный HTML: [index.html](index.html).
 
 ## Источник и благодарности
 
