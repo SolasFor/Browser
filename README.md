@@ -10,7 +10,7 @@
 
 ## Firefox Customization
 
-Набор основан на [Firefox-Mod-Blur](https://github.com/datguypiko/Firefox-Mod-Blur). В документации есть описание модификаций, параметры `about:config), скриншоты и инструкции по установке.
+Набор основан на [Firefox-Mod-Blur](https://github.com/datguypiko/Firefox-Mod-Blur). В документации есть описание модификаций, параметры `about:config`, скриншоты и инструкции по установке.
 
 **[Открыть руководство и галерею скриншотов →](firefox-customization/README.md)**
 
