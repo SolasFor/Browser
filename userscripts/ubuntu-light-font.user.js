@@ -17,7 +17,7 @@
         @font-face {
             font-family: "Ubuntu Light Custom";
             /* Ссылка на GitHub Pages, который отдаёт правильные CORS-заголовки */
-            src: url("https://raw.githubusercontent.com/SolasFor/Browser/main/assets/fonts/Ubuntu%20Light.woff2") format("woff2");
+            src: url("https://solasfor.github.io/Scripts-for-browser/Ubuntu%20Light.woff2") format("woff2");
             font-weight: 300;
             font-style: normal;
             font-display: swap;
