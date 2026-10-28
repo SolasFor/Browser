@@ -35,27 +35,38 @@
 
 ## Дополнительные CSS-моды
 
-Ниже перечислены CSS-файлы из папки `chrome/`. Это отдельные модификации: подключайте только те, которые нужны. Если файл уже импортируется в `userChrome.css`, не добавляйте его повторно.
+В таблице перечислены отдельные CSS-модификации. В столбце «Скриншот» показан предварительный просмотр, если он есть в репозитории. Нажмите на изображение, чтобы открыть его в полном размере. Подключайте модификации по одной и проверяйте результат.
 
-| Файл | Что делает |
-| --- | --- |
-| [`userChrome.css`](chrome/userChrome.css) | Основной файл стилей интерфейса Firefox: вкладки, панели инструментов, меню, адресная строка и другие элементы браузера. |
-| [`userContent.css`](chrome/userContent.css) | Стили для содержимого встроенных страниц Firefox и отдельных страниц браузера, а не для основной панели инструментов. |
-| [`cleaner_extensions_menu.css`](chrome/cleaner_extensions_menu.css) | Делает меню расширений компактнее: позволяет менять размер значков и число значков в строке, уменьшает отступы и скрывает некоторые элементы меню. |
-| [`colored_soundplaying_tab.css`](chrome/colored_soundplaying_tab.css) | Подсвечивает фоном неактивную вкладку, в которой воспроизводится звук. Цвет можно изменить в переменной `--firefoxcss-colored-sound-tab`. |
-| [`icons_in_main_menu.css`](chrome/icons_in_main_menu.css) | Возвращает или добавляет значки к пунктам главного меню Firefox. |
-| [`menu_icon_change_to_firefox.css`](chrome/menu_icon_change_to_firefox.css) | Меняет значок кнопки главного меню на логотип Firefox; использует разные варианты для светлой, тёмной и приватной темы. |
-| [`min-max-close_buttons.css`](chrome/min-max-close_buttons.css) | Оформляет кнопки закрытия, сворачивания и разворачивания окна в стиле macOS и размещает их в области вкладок. |
-| [`only_show_list-all-tabs_when_tabs_overflowing.css`](chrome/only_show_list-all-tabs_when_tabs_overflowing.css) | Показывает кнопку списка всех вкладок только тогда, когда вкладки не помещаются в панели. |
-| [`remove_folder_icons_from_bookmarks.css`](chrome/remove_folder_icons_from_bookmarks.css) | Скрывает значки папок на панели закладок, оставляя названия папок. |
-| [`thin_scrollbar_windows10.css`](chrome/thin_scrollbar_windows10.css) | Делает полосы прокрутки тоньше. Файл отмечен как ориентированный на Windows 10; на других системах результат может отличаться. |
-| [`ublock-icon-change.css`](chrome/ublock-icon-change.css) | Содержит стили для изменения оформления значка uBlock Origin в интерфейсе браузера. |
-| [`white_github_icon_in_bookmarks.css`](chrome/white_github_icon_in_bookmarks.css) | Заменяет значок GitHub на панели закладок белой версией, чтобы он лучше смотрелся на тёмном фоне. |
+| Файл или модификация | Что делает | Скриншот |
+| --- | --- | --- |
+| [`cleaner_extensions_menu.css`](chrome/cleaner_extensions_menu.css) | Делает меню расширений компактнее: позволяет настраивать размер значков и число значков в строке, уменьшает отступы и скрывает некоторые элементы меню. | — |
+| [`colored_soundplaying_tab.css`](chrome/colored_soundplaying_tab.css) | Подсвечивает фоном неактивную вкладку, в которой воспроизводится звук. Цвет задаётся переменной `--firefoxcss-colored-sound-tab`. | — |
+| [`icons_in_main_menu.css`](chrome/icons_in_main_menu.css) | Добавляет значки к пунктам главного меню Firefox. | — |
+| [`menu_icon_change_to_firefox.css`](chrome/menu_icon_change_to_firefox.css) | Заменяет значок главного меню логотипом Firefox; предусмотрены варианты для светлой, тёмной и приватной темы. | — |
+| [`min-max-close_buttons.css`](chrome/min-max-close_buttons.css) | Оформляет кнопки сворачивания, разворачивания и закрытия окна в стиле macOS и размещает их рядом с панелью вкладок. | — |
+| [`only_show_list-all-tabs_when_tabs_overflowing.css`](chrome/only_show_list-all-tabs_when_tabs_overflowing.css) | Показывает кнопку списка всех вкладок только тогда, когда вкладки не помещаются в панели. | — |
+| [`remove_folder_icons_from_bookmarks.css`](chrome/remove_folder_icons_from_bookmarks.css) | Скрывает значки папок на панели закладок, оставляя названия. | — |
+| [`thin_scrollbar_windows10.css`](chrome/thin_scrollbar_windows10.css) | Делает полосы прокрутки тоньше. В комментарии к файлу указано, что он ориентирован на Windows 10; на других системах результат может отличаться. | — |
+| [`ublock-icon-change.css`](chrome/ublock-icon-change.css) | Стили для изменения значка uBlock Origin. | — |
+| [`white_github_icon_in_bookmarks.css`](chrome/white_github_icon_in_bookmarks.css) | Заменяет значок GitHub на панели закладок белой версией для лучшей видимости на тёмном фоне. | — |
+| **Вкладки: закреплённые без фона** — [CSS](chrome/EXTRA%20MODS/1Tabs%20Bar%20Mods/Pinned%20Tabs%20-%20no%20background%20color/pinned_tabs_no_bg_color.css) | Убирает фон у закреплённых вкладок, чтобы они визуально отличались от обычных. | ![Закреплённые вкладки без фона](chrome/EXTRA%20MODS/1Tabs%20Bar%20Mods/Pinned%20Tabs%20-%20no%20background%20color/preview.png) |
+| **Вкладки: обратный цвет фона** — [CSS](chrome/EXTRA%20MODS/1Tabs%20Bar%20Mods/Tabs%20-%20reversed%20background%20color/reversed_tabs_bg_color.css) | Меняет распределение фоновых цветов вкладок на противоположное относительно базового оформления. | ![Вкладки с обратным цветом фона](chrome/EXTRA%20MODS/1Tabs%20Bar%20Mods/Tabs%20-%20reversed%20background%20color/preview.png) |
+| **Вкладки: прозрачный фон** — [CSS](chrome/EXTRA%20MODS/1Tabs%20Bar%20Mods/Tabs%20-%20transparent%20background%20color/transparent_tabs_bg_color.css) | Делает фон вкладок прозрачным, позволяя лучше сочетать вкладки с фоном темы. | ![Вкладки с прозрачным фоном](chrome/EXTRA%20MODS/1Tabs%20Bar%20Mods/Tabs%20-%20transparent%20background%20color/preview.png) |
+| **Автоматическое скрытие панели вкладок и закладок** — [CSS](chrome/EXTRA%20MODS/Autohide%20tab%20and%20bookmarks%20bar/autohide_tab_and_bookmarks_bars.css) | Автоматически скрывает панели вкладок и закладок, освобождая место на экране; способ активации и детали смотрите в [инструкции](chrome/EXTRA%20MODS/Autohide%20tab%20and%20bookmarks%20bar/installation.txt). | — |
+| **Кнопки macOS слева** — [CSS](chrome/EXTRA%20MODS/Left%20side%20MacOS%20style%20buttons/min-max-close_buttons.css) | Размещает круглые кнопки закрытия, сворачивания и разворачивания слева, в стиле macOS. | ![Кнопки macOS слева](chrome/EXTRA%20MODS/Left%20side%20MacOS%20style%20buttons/Preview-left_mac_os_style.png) |
+| **Кнопки macOS слева без анимации** — [CSS](chrome/EXTRA%20MODS/Left%20side%20MacOS%20style%20buttons/Without%20animation/min-max-close_buttons.css) | Тот же вариант кнопок слева, но без анимационных эффектов. | ![Кнопки слева без анимации](chrome/EXTRA%20MODS/Left%20side%20MacOS%20style%20buttons/Without%20animation/preview.gif) |
+| **Скрытие подписей ярлыков домашней страницы** — [CSS](chrome/EXTRA%20MODS/Remove%20text%20from%20homepage%20shortcuts/remove_homepage_shortcut_title_text.css) | Скрывает текстовые названия ярлыков на странице новой вкладки, оставляя значки сайтов. | ![Ярлыки без подписей](chrome/EXTRA%20MODS/Remove%20text%20from%20homepage%20shortcuts/preview.png) |
+| **Кнопки macOS справа** — [CSS](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/min-max-close_buttons.css) | Размещает кнопки управления окном справа, сохраняя оформление в стиле macOS. | ![Кнопки macOS справа](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/Preview.png) |
+| **Кнопки macOS справа, вариант MenuButtonsOnLeft** — [CSS](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/MenuButtonsOnLeft/min-max-close_buttons.css) | Вариант расположения кнопок окна справа с дополнительной настройкой положения кнопок меню. | ![Вариант MenuButtonsOnLeft](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/MenuButtonsOnLeft/Preview-right_mac_os_style.png) |
+| **Кнопки macOS справа без анимации** — [CSS](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/Without%20animation/min-max-close_buttons.css) | Вариант кнопок справа без анимационных эффектов. | ![Кнопки справа без анимации](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/Without%20animation/preview.gif) |
+| **Кнопки macOS справа без анимации, MenuButtonsOnLeft** — [CSS](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/Without%20animation/MenuButtonsOnLeft/min-max-close_buttons.css) | Комбинирует вариант кнопок справа без анимации с вариантом расположения кнопок меню. | ![Вариант без анимации MenuButtonsOnLeft](chrome/EXTRA%20MODS/Right%20side%20MacOS%20style%20buttons/Without%20animation/MenuButtonsOnLeft/Preview-right_mac_os_style.png) |
+| **Прозрачная панель закладок** — [инструкция и файлы](chrome/EXTRA%20MODS/Transparent%20bookmarks%20bar/) | Делает панель закладок прозрачной, чтобы она сочеталась с фоном интерфейса. | ![Прозрачная панель закладок](chrome/EXTRA%20MODS/Transparent%20bookmarks%20bar/preview.jpg) |
 
-### Дополнительные папки
+### Дополнительные ресурсы
 
-- [`chrome/ASSETS/`](chrome/ASSETS/) — вспомогательные ресурсы темы: значки, изображения и обои, на которые могут ссылаться CSS-файлы.
-- [`chrome/EXTRA MODS/`](chrome/EXTRA%20MODS/) — дополнительные необязательные модификации. Подпапки сгруппированы по назначению: панель вкладок, автоматическое скрытие панели вкладок и закладок, кнопки окна в стиле macOS, скрытие подписей ярлыков домашней страницы и прозрачная панель закладок.
-- [`chrome/EXTRA MODS/min-max-close_buttons.css`](chrome/EXTRA%20MODS/min-max-close_buttons.css) — отдельная копия стилей кнопок окна для дополнительного варианта оформления.
+- [`chrome/ASSETS/icons/`](chrome/ASSETS/icons/) — изображения значков, используемые оформлением, включая варианты логотипа Firefox и значки поисковых систем.
+- [`chrome/ASSETS/other/`](chrome/ASSETS/other/) — вспомогательные графические ресурсы, например текстура шума.
+- [`chrome/ASSETS/wallpaper/`](chrome/ASSETS/wallpaper/) — изображения обоев, которые могут использоваться оформлением.
+- [`chrome/EXTRA MODS/`](chrome/EXTRA%20MODS/) — дополнительные модификации, которые не следует подключать одновременно, если они меняют один и тот же элемент интерфейса.
 
 **Важно:** CSS-файлы в `chrome/` не обязательно активны автоматически. Проверяйте импорты в `userChrome.css` и подключайте дополнительные моды по одному, чтобы избежать конфликтов.
