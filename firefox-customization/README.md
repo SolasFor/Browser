@@ -176,17 +176,16 @@
 
 Откройте `about:config`, найдите параметр и измените значение. Если его нет, создайте с указанным типом. Для Boolean используйте `true` для включения.
 
-| Функция | Параметр | Тип | Значение |
-| --- | --- | --- | --- |
-| Extension menu changes | `mod.number.of.extensions.in.a.row` | Number | Например, `4` |
-| More compact Vertical Tabs | `mod.compact.vertical.tabs` | Boolean | `true` |
-| Hide scrollbar when Vertical tabs overflow | `mod.disable.scrollbar.in.vertical.tabs` | Boolean | `true` |
-| Window Frame border mods | `mod.main.window.frame.style-1` | Boolean | `true` |
-| Experimental: Extra Blur mods | `mod.combined.extra.blur` | Boolean | `true` |
-| Wallpaper Blur in New tab page | `mod.new-tab.background.blur` | Number | От `1` до `10`, по умолчанию `4` |
-| Card Style theme | `mod.card-theme.style.1` | Boolean | `true` |
-
-Чтобы всегда отображались кнопки информации о сайте в поисковой строке, включите параметр `mod.search.info.buttons.show.always` в `about:config`.
+| Функция | Параметр | Тип | Значение | Скриншот |
+| --- | --- | --- | --- | --- |
+| Extension menu changes | `mod.number.of.extensions.in.a.row` | Number | Например, `4` | ![Extension menu changes](https://github.com/user-attachments/assets/f73ed998-c70e-441e-8572-3361b4793cca) |
+| More compact Vertical Tabs | `mod.compact.vertical.tabs` | Boolean | `true` | ![More compact Vertical Tabs](https://github.com/user-attachments/assets/fbd97abb-6115-4861-888a-1c6aa4197f11) |
+| Hide scrollbar when Vertical tabs overflow | `mod.disable.scrollbar.in.vertical.tabs` | Boolean | `true` | ![Hide scrollbar in vertical tabs](https://github.com/user-attachments/assets/9d9bca08-67cc-4d91-babe-d56938f07095) |
+| Window Frame border mods | `mod.main.window.frame.style-1` | Boolean | `true` | ![Window Frame border](https://github.com/user-attachments/assets/1ca0e1a7-8330-4f80-bf35-7caee051ac2e) |
+| Experimental: Extra Blur mods | `mod.combined.extra.blur` | Boolean | `true` | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
+| Wallpaper Blur in New tab page | `mod.new-tab.background.blur` | Number | От `1` до `10`, по умолчанию `4` | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
+| Card Style theme | `mod.card-theme.style.1` | Boolean | `true` | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
+| Always show search info buttons | `mod.search.info.buttons.show.always` | Boolean | `true` | ![Search info buttons](https://github.com/user-attachments/assets/147a8ee1-3cf7-40ac-9d21-3e123172ddd8) |
 
 ### Сброс настройки
 
