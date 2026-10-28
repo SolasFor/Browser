@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         YouTube Tweaks
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.0.0
+// @version      1.1.0
 // @description  Кастомизация YouTube: скрытие элементов, авто-качество (FHD/2K/4K), скорость, перевод комментариев
 // @author       SolasFor
 // @match        *://*.youtube.com/*
@@ -33,6 +33,8 @@
     const STORAGE_KEY = 'retube_clone_settings';
     const POS_KEY = 'retube_clone_position';
     const QUALITY_KEY = 'retube_clone_quality';
+    const SPEED_STEP_KEY = 'retube_clone_speed_step';
+    const TRANSLATION_CACHE_KEY = 'retube_clone_translation_cache';
 
     let settings = {
         smoothAnim: false,
@@ -45,6 +47,8 @@
     };
 
     let selectedQuality = 'hd1080';
+    let speedStep = 0.25;
+    try { const savedStep = Number(localStorage.getItem(SPEED_STEP_KEY)); if ([0.05, 0.1, 0.25, 0.5].includes(savedStep)) speedStep = savedStep; } catch (e) {}
     try {
         const savedQuality = localStorage.getItem(QUALITY_KEY);
         if (savedQuality) selectedQuality = savedQuality;
@@ -171,7 +175,7 @@
     let qualityTimeout = null;
     let qualityInterval = null;
 
-    const QUALITY_MAP = { 'hd1080': 'FHD (1080p)', 'hd1440': '2K (1440p)', 'hd2160': '4K (2160p)' };
+    const QUALITY_MAP = { 'hd720': 'HD (720p)', 'hd1080': 'FHD (1080p)', 'hd1440': '2K (1440p)', 'hd2160': '4K (2160p)' };
 
     function applyAutoQuality() {
         if (qualityObserver) return;
@@ -186,9 +190,8 @@
             if (!available.includes(selectedQuality)) {
                 const order = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
                 const targetIndex = order.indexOf(selectedQuality);
-                for (let i = targetIndex + 1; i < order.length; i++) {
-                    if (available.includes(order[i])) { target = order[i]; break; }
-                }
+                const fallback = order.slice(Math.max(0, targetIndex + 1)).find(level => available.includes(level));
+                target = fallback || [...order].reverse().find(level => available.includes(level)) || available[0];
             }
             if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(target, target);
             if (player.setPlaybackQuality) player.setPlaybackQuality(target);
@@ -215,12 +218,12 @@
     function applySpeedHotkeys() {
         if (speedHotkeyHandler) return;
         speedHotkeyHandler = function(e) {
-            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || !e.ctrlKey) return;
+            if (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || !e.ctrlKey || e.altKey || e.metaKey) return;
             const video = document.querySelector('video');
             if (!video) return;
             let newRate = video.playbackRate || 1;
-            if (e.key === 'ArrowUp') { e.preventDefault(); newRate = Math.min(4, newRate + 0.25); }
-            else if (e.key === 'ArrowDown') { e.preventDefault(); newRate = Math.max(0.25, newRate - 0.25); }
+            if (e.key === 'ArrowUp') { e.preventDefault(); newRate = Math.min(4, newRate + speedStep); }
+            else if (e.key === 'ArrowDown') { e.preventDefault(); newRate = Math.max(0.25, newRate - speedStep); }
             else if (e.key === '0') { e.preventDefault(); newRate = 1; }
             else return;
             newRate = Math.round(newRate * 100) / 100;
@@ -263,7 +266,7 @@
             const video = document.querySelector('video');
             if (!video) return;
             e.preventDefault(); e.stopPropagation();
-            const delta = e.deltaY > 0 ? -0.05 : 0.05;
+            const delta = e.deltaY > 0 ? -speedStep : speedStep;
             let newRate = (video.playbackRate || 1) + delta;
             newRate = Math.max(0.25, Math.min(4, newRate));
             newRate = Math.round(newRate * 100) / 100;
@@ -282,10 +285,22 @@
     // ==========================================
 
     let translateObserver = null;
-    function isRussian(text) { return /[а-яё]/i.test(text); }
+    function isRussian(text) {
+        const value = (text || '').toLowerCase();
+        if (/[іїєґўђјљњћќџъыэѝ]/i.test(value)) return false;
+        return /[а-яё]/i.test(value) && !/[a-z]{3,}/i.test(value);
+    }
+    function getTranslationCache() {
+        try { return JSON.parse(localStorage.getItem(TRANSLATION_CACHE_KEY) || '{}'); } catch (e) { return {}; }
+    }
+    function saveTranslationCache(cache) {
+        try { localStorage.setItem(TRANSLATION_CACHE_KEY, JSON.stringify(Object.entries(cache).slice(-300).reduce((obj, pair) => { obj[pair[0]] = pair[1]; return obj; }, {}))); } catch (e) {}
+    }
 
     function translateText(text, targetLang, callback) {
-        const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' + targetLang + '&dt=t&q=' + encodeURIComponent(text.slice(0, 1500));
+        const input = text.slice(0, 1500), cache = getTranslationCache(), cacheKey = targetLang + ':' + input;
+        if (cache[cacheKey]) { callback(cache[cacheKey]); return; }
+        const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' + targetLang + '&dt=t&q=' + encodeURIComponent(input);
         GM_xmlhttpRequest({
             method: 'GET', url: url,
             onload: function(response) {
@@ -293,6 +308,7 @@
                     const data = JSON.parse(response.responseText);
                     let translated = '';
                     if (data && data[0]) { for (let i = 0; i < data[0].length; i++) { if (data[0][i] && data[0][i][0]) translated += data[0][i][0]; } }
+                    if (translated) { cache[cacheKey] = translated; saveTranslationCache(cache); }
                     callback(translated || null);
                 } catch (e) { callback(null); }
             },
@@ -460,10 +476,10 @@
 
         const panel = document.createElement('div');
         panel.id = 'retube-settings-panel';
-        panel.style.cssText = `position: fixed; z-index: 9999; width: 300px; max-height: 85vh; padding: 0 0 14px 0;
-            background-color: rgba(37, 37, 45, 0.36); color: #fff; border-radius: 14px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-            font-weight: 300; display: none; overflow-y: auto; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-            filter: drop-shadow(0 0 3px rgba(100, 110, 115, 0.6)); animation: retubeShow 0.3s ease;`;
+        panel.style.cssText = `position: fixed; z-index: 9999; width: 320px; max-height: 85vh; padding: 0 0 14px 0;
+            background: rgba(30, 32, 40, 0.72); color: #fff; border: 1px solid rgba(160, 175, 205, 0.22); border-radius: 14px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
+            font-weight: 300; display: none; overflow-y: auto; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28); animation: retubeShow 0.25s ease;`;
 
         let initialLeft, initialTop;
         try {
@@ -472,7 +488,7 @@
         } catch (e) {}
         if (initialLeft && initialTop) { panel.style.left = initialLeft; panel.style.top = initialTop; }
         else {
-            const w = 300, h = 450;
+            const w = 320, h = 480;
             panel.style.left = Math.max(20, (window.innerWidth - w) / 2) + 'px';
             panel.style.top = Math.max(20, (window.innerHeight - h) / 2) + 'px';
         }
@@ -551,7 +567,7 @@
             border: 1px solid rgb(72, 75, 91); border-radius: 5px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
             font-weight: 300; font-size: 13px; cursor: pointer;`;
 
-        ['hd1080', 'hd1440', 'hd2160'].forEach(q => {
+        ['hd720', 'hd1080', 'hd1440', 'hd2160'].forEach(q => {
             const opt = document.createElement('option');
             opt.value = q; opt.textContent = QUALITY_MAP[q];
             opt.style.cssText = 'background: rgb(37, 37, 45); color: rgb(201, 208, 211);';
@@ -570,6 +586,19 @@
         qualityRow.appendChild(qualitySelect);
         panel.appendChild(qualityRow);
 
+        const speedRow = document.createElement('div');
+        speedRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin:0 8px 6px; padding:4px 8px;';
+        const speedLabel = document.createElement('span'); speedLabel.textContent = 'Шаг скорости:';
+        speedLabel.style.cssText = 'font-size:13px; color:rgb(201,208,211);';
+        const speedSelect = document.createElement('select'); speedSelect.style.cssText = qualitySelect.style.cssText;
+        [{value:0.05,label:'0,05×'},{value:0.1,label:'0,1×'},{value:0.25,label:'0,25×'},{value:0.5,label:'0,5×'}].forEach(item => {
+            const option = document.createElement('option'); option.value = String(item.value); option.textContent = item.label;
+            option.style.cssText = 'background:rgb(37,37,45); color:rgb(201,208,211);';
+            if (item.value === speedStep) option.selected = true; speedSelect.appendChild(option);
+        });
+        speedSelect.addEventListener('change', () => { speedStep = Number(speedSelect.value); try { localStorage.setItem(SPEED_STEP_KEY, String(speedStep)); } catch (e) {} });
+        speedRow.appendChild(speedLabel); speedRow.appendChild(speedSelect); panel.appendChild(speedRow);
+
         const btnRow = document.createElement('div');
         btnRow.style.cssText = 'display: flex; gap: 8px; margin: 12px 8px 0 8px;';
 
@@ -581,6 +610,9 @@
         saveBtn.addEventListener('mouseenter', () => saveBtn.style.background = 'rgb(96, 100, 110, 0.6)');
         saveBtn.addEventListener('mouseleave', () => saveBtn.style.background = 'rgb(96, 100, 110, 0.37)');
 
+        const resetBtn = document.createElement('button');
+        resetBtn.id = 'retube-reset'; resetBtn.textContent = 'Сбросить';
+        resetBtn.style.cssText = `flex:1; padding:8px 10px; background:rgba(120,80,80,0.32); color:rgb(230,215,215); border-radius:5px; border:1px solid rgba(150,95,95,0.55); font-family:"Ubuntu Light Custom","Ubuntu",sans-serif; font-size:14px; cursor:pointer;`;
         const closeBtn = document.createElement('button');
         closeBtn.id = 'retube-close'; closeBtn.textContent = 'Закрыть';
         closeBtn.style.cssText = `flex: 1; padding: 8px 10px; background: rgb(96, 100, 110, 0.37); color: rgb(201, 208, 211);
@@ -589,7 +621,16 @@
         closeBtn.addEventListener('mouseenter', () => closeBtn.style.background = 'rgb(96, 100, 110, 0.6)');
         closeBtn.addEventListener('mouseleave', () => closeBtn.style.background = 'rgb(96, 100, 110, 0.37)');
 
-        btnRow.appendChild(saveBtn); btnRow.appendChild(closeBtn); panel.appendChild(btnRow);
+        btnRow.appendChild(saveBtn); btnRow.appendChild(resetBtn); btnRow.appendChild(closeBtn); panel.appendChild(btnRow);
+        resetBtn.addEventListener('click', () => {
+            const defaults = { smoothAnim:false, hideElements:false, wheelSpeed:false, translateComments:false, compactMode:false, autoQuality:false, speedHotkeys:false };
+            Object.assign(settings, defaults); selectedQuality = 'hd1080'; speedStep = 0.25;
+            const ids = { smoothAnim:'retube-smooth-anim', hideElements:'retube-hide-elements', wheelSpeed:'retube-wheel-speed', translateComments:'retube-translate-comments', compactMode:'retube-compact-mode', autoQuality:'retube-auto-quality', speedHotkeys:'retube-speed-hotkeys' };
+            Object.entries(ids).forEach(([key,id]) => { const cb = panel.querySelector('#' + id); if (cb) cb.checked = false; toggleFeature(key, false); });
+            qualitySelect.value = selectedQuality; speedSelect.value = String(speedStep);
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); localStorage.setItem(QUALITY_KEY, selectedQuality); localStorage.setItem(SPEED_STEP_KEY, String(speedStep)); } catch (e) {}
+            resetBtn.textContent = 'Сброшено ✓'; setTimeout(() => { resetBtn.textContent = 'Сбросить'; }, 1200);
+        });
         document.body.appendChild(panel);
         makeDraggable(panel, header);
 
