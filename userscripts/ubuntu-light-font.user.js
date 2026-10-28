@@ -41,9 +41,44 @@
         styleHandle = null;
         document.querySelectorAll('style[data-ubuntu-light-font]').forEach(node => node.remove());
     }
+    let fontEnabled = false;
+    let statusBadge = null;
+    let statusTimer = null;
+
+    function showStatus(enabled, message) {
+        if (!statusBadge) {
+            statusBadge = document.createElement('div');
+            statusBadge.id = 'ubuntu-light-font-status';
+            statusBadge.setAttribute('role', 'status');
+            statusBadge.style.cssText = [
+                'position:fixed', 'right:18px', 'bottom:18px', 'z-index:2147483647',
+                'padding:10px 14px', 'border-radius:10px', 'font:600 13px/1.35 system-ui,sans-serif',
+                'letter-spacing:.01em', 'color:#fff', 'box-shadow:0 6px 24px rgba(0,0,0,.3)',
+                'backdrop-filter:blur(10px)', '-webkit-backdrop-filter:blur(10px)',
+                'pointer-events:none', 'opacity:0', 'transform:translateY(6px)',
+                'transition:opacity .18s ease, transform .18s ease'
+            ].join(';');
+            (document.body || document.documentElement).appendChild(statusBadge);
+        }
+        statusBadge.textContent = message || (enabled ? 'Ubuntu Light: ВКЛЮЧЁН' : 'Ubuntu Light: ВЫКЛЮЧЕН');
+        statusBadge.style.background = enabled ? 'rgba(28,125,76,.94)' : 'rgba(150,55,55,.94)';
+        statusBadge.style.opacity = '1';
+        statusBadge.style.transform = 'translateY(0)';
+        if (statusTimer) clearTimeout(statusTimer);
+        statusTimer = setTimeout(() => {
+            if (statusBadge) {
+                statusBadge.style.opacity = '0';
+                statusBadge.style.transform = 'translateY(6px)';
+            }
+        }, 2200);
+    }
+
     function applyFontStyle() {
         removeFontStyle();
-        if (isExcluded(location.hostname.toLowerCase())) return;
+        if (isExcluded(location.hostname.toLowerCase())) {
+            fontEnabled = false;
+            return false;
+        }
         if (typeof GM_addStyle === 'function') styleHandle = GM_addStyle(css);
         else {
             const style = document.createElement('style');
@@ -51,18 +86,41 @@
             (document.head || document.documentElement).appendChild(style); styleHandle = style;
         }
         if (styleHandle && styleHandle.nodeType === 1) styleHandle.dataset.ubuntuLightFont = 'true';
+        fontEnabled = true;
+        return true;
     }
-    // Alt+Shift+U toggles Ubuntu Light for the current host; exclusions persist across sites.
+
+    // Alt+Shift+U toggles the font for the current host and displays an unmistakable status toast.
     window.addEventListener('keydown', function (event) {
         if (!(event.altKey && event.shiftKey && event.code === 'KeyU') || event.repeat || event.ctrlKey || event.metaKey) return;
         const host = location.hostname.toLowerCase(), excluded = getExcludedHosts();
         const next = excluded.includes(host) ? excluded.filter(item => item !== host) : [...excluded, host];
         try {
-            if (typeof GM_setValue !== 'function') { console.warn('Ubuntu Light Font: persistent exclusions require GM_setValue support.'); return; }
+            if (typeof GM_setValue !== 'function') {
+                showStatus(fontEnabled, 'Ubuntu Light: не удалось сохранить состояние');
+                console.warn('Ubuntu Light Font: persistent exclusions require GM_setValue support.');
+                return;
+            }
             GM_setValue(EXCLUDED_KEY, next);
-            if (next.includes(host)) removeFontStyle(); else applyFontStyle();
-            console.info('Ubuntu Light Font: ' + (next.includes(host) ? 'disabled on ' : 'enabled on ') + host);
-        } catch (error) { console.warn('Ubuntu Light Font: could not save exclusions.', error); }
+            if (next.includes(host)) {
+                removeFontStyle();
+                fontEnabled = false;
+            } else {
+                fontEnabled = applyFontStyle();
+            }
+            showStatus(fontEnabled);
+            console.info('Ubuntu Light Font: ' + (fontEnabled ? 'enabled on ' : 'disabled on ') + host);
+        } catch (error) {
+            showStatus(fontEnabled, 'Ubuntu Light: ошибка сохранения');
+            console.warn('Ubuntu Light Font: could not save exclusions.', error);
+        }
     }, true);
-    applyFontStyle();
+
+    const initiallyEnabled = applyFontStyle();
+    // Show the initial state briefly, including when the current site is excluded.
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => showStatus(initiallyEnabled), { once: true });
+    } else {
+        showStatus(initiallyEnabled);
+    }
 })();
