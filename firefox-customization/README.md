@@ -33,5 +33,29 @@
 | Центрирование вкладок | `mod.centered.tabs` | Boolean | `true` | Выравнивает вкладки по центру в соответствии со стилем модификации. | ![Центрирование вкладок](https://github.com/user-attachments/assets/2a74fd5a-ae63-4469-a502-d6482fadd62e) |
 | Всегда показывать кнопки информации о сайте | `mod.search.info.buttons.show.always` | Boolean | `true` | Постоянно отображает кнопки информации о сайте в адресной строке, а не только при определённых состояниях интерфейса. | ![Кнопки информации о сайте](https://github.com/user-attachments/assets/147a8ee1-3cf7-40ac-9d21-3e123172ddd8) |
 
-### Сброс настройки
+## Дополнительные CSS-моды
 
+Ниже перечислены CSS-файлы из папки `chrome/`. Это отдельные модификации: подключайте только те, которые нужны. Если файл уже импортируется в `userChrome.css`, не добавляйте его повторно.
+
+| Файл | Что делает |
+| --- | --- |
+| [`userChrome.css`](chrome/userChrome.css) | Основной файл стилей интерфейса Firefox: вкладки, панели инструментов, меню, адресная строка и другие элементы браузера. |
+| [`userContent.css`](chrome/userContent.css) | Стили для содержимого встроенных страниц Firefox и отдельных страниц браузера, а не для основной панели инструментов. |
+| [`cleaner_extensions_menu.css`](chrome/cleaner_extensions_menu.css) | Делает меню расширений компактнее: позволяет менять размер значков и число значков в строке, уменьшает отступы и скрывает некоторые элементы меню. |
+| [`colored_soundplaying_tab.css`](chrome/colored_soundplaying_tab.css) | Подсвечивает фоном неактивную вкладку, в которой воспроизводится звук. Цвет можно изменить в переменной `--firefoxcss-colored-sound-tab`. |
+| [`icons_in_main_menu.css`](chrome/icons_in_main_menu.css) | Возвращает или добавляет значки к пунктам главного меню Firefox. |
+| [`menu_icon_change_to_firefox.css`](chrome/menu_icon_change_to_firefox.css) | Меняет значок кнопки главного меню на логотип Firefox; использует разные варианты для светлой, тёмной и приватной темы. |
+| [`min-max-close_buttons.css`](chrome/min-max-close_buttons.css) | Оформляет кнопки закрытия, сворачивания и разворачивания окна в стиле macOS и размещает их в области вкладок. |
+| [`only_show_list-all-tabs_when_tabs_overflowing.css`](chrome/only_show_list-all-tabs_when_tabs_overflowing.css) | Показывает кнопку списка всех вкладок только тогда, когда вкладки не помещаются в панели. |
+| [`remove_folder_icons_from_bookmarks.css`](chrome/remove_folder_icons_from_bookmarks.css) | Скрывает значки папок на панели закладок, оставляя названия папок. |
+| [`thin_scrollbar_windows10.css`](chrome/thin_scrollbar_windows10.css) | Делает полосы прокрутки тоньше. Файл отмечен как ориентированный на Windows 10; на других системах результат может отличаться. |
+| [`ublock-icon-change.css`](chrome/ublock-icon-change.css) | Содержит стили для изменения оформления значка uBlock Origin в интерфейсе браузера. |
+| [`white_github_icon_in_bookmarks.css`](chrome/white_github_icon_in_bookmarks.css) | Заменяет значок GitHub на панели закладок белой версией, чтобы он лучше смотрелся на тёмном фоне. |
+
+### Дополнительные папки
+
+- [`chrome/ASSETS/`](chrome/ASSETS/) — вспомогательные ресурсы темы: значки, изображения и обои, на которые могут ссылаться CSS-файлы.
+- [`chrome/EXTRA MODS/`](chrome/EXTRA%20MODS/) — дополнительные необязательные модификации. Подпапки сгруппированы по назначению: панель вкладок, автоматическое скрытие панели вкладок и закладок, кнопки окна в стиле macOS, скрытие подписей ярлыков домашней страницы и прозрачная панель закладок.
+- [`chrome/EXTRA MODS/min-max-close_buttons.css`](chrome/EXTRA%20MODS/min-max-close_buttons.css) — отдельная копия стилей кнопок окна для дополнительного варианта оформления.
+
+**Важно:** CSS-файлы в `chrome/` не обязательно активны автоматически. Проверяйте импорты в `userChrome.css` и подключайте дополнительные моды по одному, чтобы избежать конфликтов.
