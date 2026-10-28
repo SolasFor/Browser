@@ -28,34 +28,6 @@
 | Компактная адресная строка | ![Компактная адресная строка](https://i.imgur.com/gu3HnMx.gif) |
 | Компактная домашняя страница | ![Домашняя страница](https://i.imgur.com/lhc2Muh.gif) |
 
-### Кнопки управления окном
-
-В исходном проекте есть разные варианты расположения кнопок сворачивания, разворачивания и закрытия. Подключайте только один вариант.
-
-<details><summary>Скриншоты вариантов</summary>
-
-**Кнопки слева, стиль macOS**
-
-![Кнопки слева, macOS](https://i.imgur.com/pR78PN5.png)
-
-**Кнопки справа, стиль macOS**
-
-![Кнопки справа, macOS](https://i.imgur.com/032WjXp.png)
-
-**Кнопки справа, стиль ОС**
-
-![Кнопки справа, стиль ОС](https://i.imgur.com/uTcbB4p.png)
-
-**Кнопки слева, стиль ОС**
-
-![Кнопки слева, стиль ОС](https://github.com/datguypiko/Firefox-Mod-Blur/assets/61329159/45180997-9195-48bd-a135-9de65c4a27ac)
-
-**Стандартный стиль**
-
-![Стандартный стиль](https://github.com/datguypiko/Firefox-Mod-Blur/assets/61329159/cddf0baf-0f9e-4467-a47f-77036361999f)
-
-</details>
-
 ### Панель закладок
 
 <details><summary>Скриншоты модификаций панели закладок</summary>
@@ -124,9 +96,6 @@
 
 ![Центрированные вкладки](https://github.com/user-attachments/assets/2a74fd5a-ae63-4469-a502-d6482fadd62e)
 
-**Скрыть панель предпросмотра вкладки** — `firefoxcss.disable.tab.preview.panel.fully`
-
-![Отключённый предпросмотр вкладки](https://github.com/user-attachments/assets/dd684579-3142-4245-9e75-f0cd29e1d1e6)
 
 **Скрыть полосу прокрутки вертикальных вкладок** — `mod.disable.scrollbar.in.vertical.tabs`
 
@@ -154,9 +123,6 @@
 
 <details><summary>Показать скриншоты параметров about:config</summary>
 
-**Контур фокуса поисковой строки** — `mod.searchBox.focus.outline.enable`
-
-![Контур фокуса поисковой строки](https://github.com/user-attachments/assets/52537d21-347b-4d3c-9ebf-d3b3e1ba3af9)
 
 **Всегда показывать кнопки информации о сайте** — `mod.search.info.buttons.show.always`
 
@@ -178,6 +144,8 @@
 
 | Функция | Параметр | Тип | Значение | Пояснение | Скриншот |
 | --- | --- | --- | --- | --- | --- |
+| Скрыть панель предпросмотра вкладки | `firefoxcss.disable.tab.preview.panel.fully` | Boolean | `true` | Отключает всплывающую панель предпросмотра, которая появляется при наведении на вкладку. | ![Отключённый предпросмотр вкладки](https://github.com/user-attachments/assets/dd684579-3142-4245-9e75-f0cd29e1d1e6) |
+| Контур фокуса поисковой строки | `mod.searchBox.focus.outline.enable` | Boolean | `true` | Включает контур, выделяющий поисковую строку при получении фокуса. | ![Контур фокуса поисковой строки](https://github.com/user-attachments/assets/52537d21-347b-4d3c-9ebf-d3b3e1ba3af9) |
 | Скрыть неактивные расширения | `mod.hide.faded-extensions.inside.extensions-menu` | Boolean | `true` | Скрывает неактивные или визуально приглушённые расширения в меню расширений. | ![Скрытие неактивных расширений](https://github.com/user-attachments/assets/531b9958-40f0-4e12-95dd-649519670b10) |
 | Компактные вертикальные вкладки | `mod.compact.vertical.tabs` | Boolean | `true` | Делает вертикальные вкладки более компактными, чтобы они занимали меньше места. | ![Компактные вертикальные вкладки](https://github.com/user-attachments/assets/fbd97abb-6115-4861-888a-1c6aa4197f11) |
 | Скрыть полосу прокрутки вертикальных вкладок | `mod.disable.scrollbar.in.vertical.tabs` | Boolean | `true` | Скрывает полосу прокрутки, когда список вертикальных вкладок переполняет доступную область. | ![Полоса прокрутки вертикальных вкладок](https://github.com/user-attachments/assets/9d9bca08-67cc-4d91-babe-d56938f07095) |
@@ -194,7 +162,33 @@
 
 ## Дополнительные CSS-моды
 
-В каталоге [`chrome/EXTRA MODS/`](chrome/EXTRA%20MODS/) лежат необязательные стили: варианты кнопок окна, прозрачная панель закладок, скрытие названий ярлыков домашней страницы и другие эффекты. Перед подключением прочитайте `installation.txt` или `readme.txt`, если такой файл есть. Некоторые моды конфликтуют друг с другом или требуют ручного добавления `@import` в `userChrome.css`.
+### Кнопки управления окном
+
+В исходном проекте есть разные варианты расположения кнопок сворачивания, разворачивания и закрытия. Подключайте только один вариант одновременно, поскольку стили могут конфликтовать.
+
+<details><summary>Скриншоты вариантов</summary>
+
+**Кнопки слева, стиль macOS**
+
+![Кнопки слева, macOS](https://i.imgur.com/pR78PN5.png)
+
+**Кнопки справа, стиль macOS**
+
+![Кнопки справа, macOS](https://i.imgur.com/032WjXp.png)
+
+**Кнопки справа, стиль ОС**
+
+![Кнопки справа, стиль ОС](https://i.imgur.com/uTcbB4p.png)
+
+**Кнопки слева, стиль ОС**
+
+![Кнопки слева, стиль ОС](https://github.com/datguypiko/Firefox-Mod-Blur/assets/61329159/45180997-9195-48bd-a135-9de65c4a27ac)
+
+**Стандартный стиль**
+
+![Стандартный стиль](https://github.com/datguypiko/Firefox-Mod-Blur/assets/61329159/cddf0baf-0f9e-4467-a47f-77036361999f)
+
+</details>
 
 ## Устранение проблем
 
