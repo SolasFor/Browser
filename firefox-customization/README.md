@@ -174,26 +174,19 @@
 
 ## Дополнительные настройки about:config
 
-Откройте `about:config`, найдите параметр и измените значение. Если его нет, создайте с указанным типом. Для Boolean используйте `true` для включения. Для Number укажите число из разрешённого диапазона.
+Откройте `about:config`, найдите параметр и измените значение. Если его нет, создайте с указанным типом. Для Boolean используйте `true` для включения.
 
-| Функция | Параметр | Тип | Значение | Пример |
-| --- | --- | --- | --- | --- |
-| Количество расширений в строке | `mod.number.of.extensions.in.a.row` | Number | 1–10; стандартно 4 | ![Пример количества расширений в строке](https://github.com/user-attachments/assets/f73ed998-c70e-441e-8572-3361b4793cca) |
-| Размер значков расширений | `mod.extensions.menu.extention-icon.size` | Number | 12–30; стандартно 22 | ![Пример размера значков расширений](https://github.com/user-attachments/assets/1d7c0815-dff3-4c4f-9f12-3a981e989e0b) |
-| Скрыть кнопку управления расширениями | `mod.hide.manage-extensions.button` | Boolean | `true` | ![Пример скрытия кнопки управления расширениями](https://github.com/user-attachments/assets/eb191a66-3cb5-4f2c-905d-57c44fef941f) |
-| Скрыть разделитель меню расширений | `mod.disable.extensions-menu.separator` | Boolean | `true` | ![Пример скрытия разделителя меню](https://github.com/user-attachments/assets/f40b7043-9917-46a4-b3c1-4eb0ea510ed3) |
-| Скрыть неактивные расширения | `mod.hide.faded-extensions.inside.extensions-menu` | Boolean | `true` | ![Пример скрытия неактивных расширений](https://github.com/user-attachments/assets/531b9958-40f0-4e12-95dd-649519670b10) |
-| Компактные вертикальные вкладки | `mod.compact.vertical.tabs` | Boolean | `true` | ![Пример компактных вертикальных вкладок](https://github.com/user-attachments/assets/fbd97abb-6115-4861-888a-1c6aa4197f11) |
-| Скрыть полосу прокрутки вертикальных вкладок | `mod.disable.scrollbar.in.vertical.tabs` | Boolean | `true` | ![Пример полосы прокрутки вертикальных вкладок](https://github.com/user-attachments/assets/9d9bca08-67cc-4d91-babe-d56938f07095) |
-| Рамка окна — стиль 1 | `mod.main.window.frame.style-1` | Boolean | `true` | ![Пример пользовательской рамки окна](https://github.com/user-attachments/assets/1ca0e1a7-8330-4f80-bf35-7caee051ac2e) |
-| Рамка окна — стиль 2 | `mod.main.window.frame.style-2` | Boolean | `true` | ![Пример пользовательской рамки окна](https://github.com/user-attachments/assets/1ca0e1a7-8330-4f80-bf35-7caee051ac2e) |
-| Дополнительное размытие | `mod.combined.extra.blur` | Boolean | `true` | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
-| Размытие фона новой вкладки | `mod.new-tab.background.blur` | Number | 1–10; стандартно 4 | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
-| Тема карточек — стиль 1 | `mod.card-theme.style.1` | Boolean | `true` | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
-| Тема карточек — стиль 2 | `mod.card-theme.style.2` | Boolean | `true` | [Исходный проект](https://github.com/datguypiko/Firefox-Mod-Blur) |
-| Центрирование вкладок | `mod.centered.tabs` | Boolean | `true` | ![Пример центрирования вкладок](https://github.com/user-attachments/assets/2a74fd5a-ae63-4469-a502-d6482fadd62e) |
-| Контур фокуса поисковой строки | `mod.searchBox.focus.outline.enable` | Boolean | `true` | ![Пример контура фокуса поисковой строки](https://github.com/user-attachments/assets/52537d21-347b-4d3c-9ebf-d3b3e1ba3af9) |
-| Всегда показывать кнопки информации о сайте | `mod.search.info.buttons.show.always` | Boolean | `true` | ![Пример кнопок информации о сайте](https://github.com/user-attachments/assets/147a8ee1-3cf7-40ac-9d21-3e123172ddd8) |
+| Функция | Параметр | Тип | Значение |
+| --- | --- | --- | --- |
+| Extension menu changes | `mod.number.of.extensions.in.a.row` | Number | Например, `4` |
+| More compact Vertical Tabs | `mod.compact.vertical.tabs` | Boolean | `true` |
+| Hide scrollbar when Vertical tabs overflow | `mod.disable.scrollbar.in.vertical.tabs` | Boolean | `true` |
+| Window Frame border mods | `mod.main.window.frame.style-1` | Boolean | `true` |
+| Experimental: Extra Blur mods | `mod.combined.extra.blur` | Boolean | `true` |
+| Wallpaper Blur in New tab page | `mod.new-tab.background.blur` | Number | От `1` до `10`, по умолчанию `4` |
+| Card Style theme | `mod.card-theme.style.1` | Boolean | `true` |
+
+Чтобы всегда отображались кнопки информации о сайте в поисковой строке, включите параметр `mod.search.info.buttons.show.always` в `about:config`.
 
 ### Сброс настройки
 
