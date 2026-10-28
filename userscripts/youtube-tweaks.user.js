@@ -191,7 +191,7 @@
                 const order = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
                 const targetIndex = order.indexOf(selectedQuality);
                 const fallback = order.slice(Math.max(0, targetIndex + 1)).find(level => available.includes(level));
-                target = fallback || [...order].reverse().find(level => available.includes(level)) || available[0];
+                target = fallback || order.find(level => available.includes(level)) || available[0];
             }
             if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(target, target);
             if (player.setPlaybackQuality) player.setPlaybackQuality(target);
