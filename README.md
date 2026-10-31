@@ -6,12 +6,6 @@
 
 - [Browser Tweaks](userscripts/browser-tweaks-unified.user.js) — единый userscript: глобальный шрифт Ubuntu Light и дополнительные настройки YouTube.
 
-## Firefox Customization
-
-Набор основан на [Firefox-Mod-Blur](https://github.com/datguypiko/Firefox-Mod-Blur). В документации есть описание модификаций, параметры `about:config`, скриншоты и инструкции по установке.
-
-**[Открыть руководство и галерею скриншотов →](firefox-customization/README.md)**
-
 ## Browser Tweaks
 
 В репозитории используется один пользовательский скрипт — **Browser Tweaks**. Для установки потребуется расширение [Violentmonkey](https://violentmonkey.github.io/).
