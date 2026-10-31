@@ -1,10 +1,26 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="CSS-моды для Firefox и пользовательские скрипты."><title>Browser Customization — SolasFor</title>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="CSS-моды для Firefox и объединённые пользовательские скрипты Browser Tweaks."><title>Browser Customization — SolasFor</title>
 <style>
 :root{color-scheme:dark;background:#0b1020;color:#edf2fb;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% 0%,#234a7c55,transparent 34%),#0b1020}main{width:min(1000px,calc(100% - 36px));margin:auto;padding:72px 0}.eyebrow{color:#8ab4ff;letter-spacing:.15em;text-transform:uppercase;font-size:.8rem;font-weight:700}h1{font-size:clamp(2.6rem,8vw,5.5rem);line-height:1;letter-spacing:-.06em;margin:18px 0}.intro,p{color:#aab5c8;line-height:1.7}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px}.card{padding:24px;border:1px solid #ffffff1b;border-radius:18px;background:#141c2de8}.button{display:inline-block;padding:11px 15px;border-radius:10px;background:linear-gradient(135deg,#2878e8,#6947d9);color:white;text-decoration:none;font-weight:700;margin:4px 4px 4px 0}.secondary{background:#ffffff12}section{margin-top:48px}footer{margin-top:56px;border-top:1px solid #ffffff1b;padding-top:20px;font-size:.9rem}
-</style></head><body><main><div class="eyebrow">SolasFor / Browser</div><h1>Browser<br>Customization</h1><p class="intro">Коллекция пользовательских скриптов и CSS-модификаций для Firefox: компактный интерфейс, дополнительные настройки и улучшения повседневного просмотра сайтов.</p>
-<section><h2>С чего начать</h2><div class="grid"><article class="card"><h3>1. Настроить Firefox</h3><p>Включи поддержку пользовательских стилей, затем скопируй файлы в папку профиля браузера.</p><a class="button" href="firefox-customization/README.md">Инструкция по установке</a></article><article class="card"><h3>2. Установить скрипты</h3><p>Установи Violentmonkey, открой нужный userscript и подтверди установку в расширении.</p><a class="button secondary" href="https://violentmonkey.github.io/">Получить Violentmonkey</a></article></div></section>\n<section><h2>Firefox Customization</h2><div class="grid"><article class="card"><h3>Firefox-Mod-Blur collection</h3><p>CSS-моды, настройки about:config и галерея скриншотов, показывающая визуальный эффект каждой функции.</p><a class="button" href="firefox-customization/README.md">Документация и скриншоты</a><a class="button secondary" href="https://github.com/datguypiko/Firefox-Mod-Blur">Исходный проект</a></article></div></section>
-<section><h2>Userscripts</h2><div class="grid"><article class="card"><h3>YouTube Tweaks</h3><p>Небольшие улучшения интерфейса YouTube через Violentmonkey.</p><a class="button" href="userscripts/youtube-tweaks.user.js">Установить скрипт</a></article><article class="card"><h3>Ubuntu Light Font</h3><p>Подключение шрифта Ubuntu Light на поддерживаемых страницах.</p><a class="button" href="userscripts/ubuntu-light-font.user.js">Установить скрипт</a></article></div></section>
-<footer>CSS-модификации основаны на <a href="https://github.com/datguypiko/Firefox-Mod-Blur">Firefox-Mod-Blur</a>. <a href="README.md">README проекта</a>.</footer></main></body></html>
+</style></head>
+<body><main>
+<div class="eyebrow">SolasFor / Browser</div>
+<h1>Browser<br>Customization</h1>
+<p class="intro">Коллекция пользовательских скриптов и CSS-модификаций для Firefox: настройка интерфейса браузера, глобальный шрифт Ubuntu Light и дополнительные инструменты для YouTube.</p>
+
+<section><h2>С чего начать</h2><div class="grid">
+<article class="card"><h3>1. Настроить Firefox</h3><p>Включи поддержку пользовательских стилей, затем скопируй файлы в папку профиля браузера.</p><a class="button" href="firefox-customization/README.md">Инструкция по установке</a></article>
+<article class="card"><h3>2. Установить Violentmonkey</h3><p>Расширение для установки и управления пользовательскими скриптами.</p><a class="button secondary" href="https://violentmonkey.github.io/">Получить Violentmonkey</a></article>
+</div></section>
+
+<section><h2>Firefox Customization</h2><div class="grid"><article class="card"><h3>Firefox-Mod-Blur collection</h3><p>CSS-моды, настройки about:config и галерея скриншотов, показывающая визуальный эффект каждой функции.</p><a class="button" href="firefox-customization/README.md">Документация и скриншоты</a><a class="button secondary" href="https://github.com/datguypiko/Firefox-Mod-Blur">Исходный проект</a></article></div></section>
+
+<section><h2>Userscripts</h2><div class="grid">
+<article class="card"><h3>Browser Tweaks — объединённый скрипт</h3><p>Один userscript для глобального Ubuntu Light и инструментов YouTube. Шрифт настраивается на любых сайтах: два уровня интенсивности и список исключений. Функции YouTube доступны только на YouTube.</p><p><strong>Управление:</strong> F2 — панель настроек; Alt + Shift + U — исключить или вернуть текущий сайт.</p><a class="button" href="README.md">Описание функций и инструкция</a></article>
+<article class="card"><h3>Старые самостоятельные скрипты</h3><p>Предыдущие отдельные версии Ubuntu Light Font и YouTube Tweaks. Не запускай их одновременно с объединённой версией.</p><a class="button secondary" href="userscripts/youtube-tweaks.user.js">YouTube Tweaks (legacy)</a><a class="button secondary" href="userscripts/ubuntu-light-font.user.js">Ubuntu Light (legacy)</a></article>
+</div></section>
+
+<footer>CSS-модификации основаны на <a href="https://github.com/datguypiko/Firefox-Mod-Blur">Firefox-Mod-Blur</a>. <a href="README.md">README проекта</a>.</footer>
+</main></body></html>
