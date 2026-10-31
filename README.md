@@ -1,10 +1,9 @@
 # Browser Customization
 
-Коллекция CSS-модификаций Firefox и единый пользовательский скрипт Browser Tweaks для браузера. Репозиторий объединяет настройки интерфейса Firefox и инструменты для повседневного просмотра сайтов.
+Единый пользовательский скрипт Browser Tweaks для браузера: глобальный шрифт Ubuntu Light и дополнительные инструменты для YouTube.
 
 ## Содержание
 
-- [Firefox Customization](firefox-customization/README.md) — установка CSS-модов, параметры `about:config` и визуальные примеры.
 - [Browser Tweaks](userscripts/browser-tweaks-unified.user.js) — единый userscript: глобальный шрифт Ubuntu Light и дополнительные настройки YouTube.
 
 ## Firefox Customization
