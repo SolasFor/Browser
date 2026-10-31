@@ -1,9 +1,13 @@
 // ==UserScript==
 // @name         Browser Tweaks — Ubuntu Light + YouTube
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.0.0
+// @version      1.0.1
 // @description  Глобальный Ubuntu Light и набор настроек YouTube в одной панели
 // @author       SolasFor
+// @homepageURL  https://github.com/SolasFor/Browser
+// @supportURL   https://github.com/SolasFor/Browser/issues
+// @updateURL    https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js
+// @downloadURL  https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js
 // @match        *://*/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
