@@ -31,7 +31,20 @@
         try { const v = GM_getValue(FONT_EXCLUDED_KEY, []); return Array.isArray(v) ? v : []; }
         catch (_) { return []; }
     };
-    const isFontExcluded = () => getExcludedHosts().some(x => host === x || host.endsWith('.' + x));
+    const matchesHost = excludedHost => host === excludedHost || host.endsWith('.' + excludedHost);
+    const isFontExcluded = () => getExcludedHosts().some(matchesHost);
+    function toggleFontExclusion() {
+        const excluded = isFontExcluded();
+        const hosts = getExcludedHosts();
+        const next = excluded ? hosts.filter(x => !matchesHost(x)) : [...hosts, host];
+        try { GM_setValue(FONT_EXCLUDED_KEY, [...new Set(next)]); } catch (_) {}
+        const nowExcluded = isFontExcluded();
+        if (nowExcluded) {
+            if (fontStyleHandle && fontStyleHandle.remove) fontStyleHandle.remove();
+            fontStyleHandle = null;
+        } else applyGlobalFont();
+        return nowExcluded;
+    }
     let fontIntensity = 'strong';
     try { const v = GM_getValue(FONT_INTENSITY_KEY, 'strong'); if (['soft','strong'].includes(v)) fontIntensity = v; } catch (_) {}
     let fontStyleHandle = null;
@@ -54,7 +67,7 @@
     }
     applyGlobalFont();
 
-    function addFontControls(panel, labelStyle, selectStyle, buttonStyle) {
+    function addFontControls(panel, selectStyle, buttonStyle) {
         const section = document.createElement('div');
         section.style.cssText = 'margin:10px 8px 8px;padding:9px 8px;border:1px solid rgba(150,165,195,.2);border-radius:9px;background:rgba(100,110,135,.10)';
         const heading = document.createElement('div');
@@ -84,12 +97,8 @@
         exclude.textContent = isFontExcluded() ? 'Включить на этом сайте' : 'Исключить этот сайт';
         exclude.style.cssText = buttonStyle || 'width:100%;padding:7px;background:rgba(96,100,110,.37);color:#dce1e8;border:1px solid #555b6b;border-radius:5px;cursor:pointer';
         exclude.addEventListener('click', () => {
-            const list = getExcludedHosts();
-            const next = isFontExcluded() ? list.filter(x => !(host === x || host.endsWith('.' + x))) : [...list, host];
-            try { GM_setValue(FONT_EXCLUDED_KEY, [...new Set(next)]); } catch (_) {}
-            if (isFontExcluded()) { if (fontStyleHandle && fontStyleHandle.remove) fontStyleHandle.remove(); fontStyleHandle=null; }
-            else applyGlobalFont();
-            exclude.textContent = isFontExcluded() ? 'Включить на этом сайте' : 'Исключить этот сайт';
+            const excluded = toggleFontExclusion();
+            exclude.textContent = excluded ? 'Включить на этом сайте' : 'Исключить этот сайт';
         });
         section.appendChild(exclude);
         const note = document.createElement('div');
@@ -117,11 +126,7 @@
     }
     window.addEventListener('keydown', e => {
         if (!(e.altKey && e.shiftKey && e.code === 'KeyU') || e.repeat || e.ctrlKey || e.metaKey) return;
-        const list=getExcludedHosts();
-        const next=isFontExcluded() ? list.filter(x => !(host===x || host.endsWith('.'+x))) : [...list,host];
-        try { GM_setValue(FONT_EXCLUDED_KEY,[...new Set(next)]); } catch (_) {}
-        if (isFontExcluded()) { if(fontStyleHandle && fontStyleHandle.remove) fontStyleHandle.remove(); fontStyleHandle=null; }
-        else applyGlobalFont();
+        toggleFontExclusion();
     }, true);
 
     if (!isYouTube) {
@@ -667,6 +672,11 @@
         const cbCompact = makeCheckbox('retube-compact-mode', 'Компактный режим', 'compactMode');
         const cbAutoQuality = makeCheckbox('retube-auto-quality', 'Авто-качество', 'autoQuality');
         const cbSpeedHotkeys = makeCheckbox('retube-speed-hotkeys', 'Горячие клавиши для скорости', 'speedHotkeys');
+        const featureCheckboxes = [
+            [cbAnim, 'smoothAnim'], [cbHide, 'hideElements'], [cbWheel, 'wheelSpeed'],
+            [cbTranslate, 'translateComments'], [cbCompact, 'compactMode'],
+            [cbAutoQuality, 'autoQuality'], [cbSpeedHotkeys, 'speedHotkeys']
+        ];
 
         const qualityRow = document.createElement('div');
         qualityRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin: 0 8px 6px 8px; padding: 4px 8px;';
@@ -714,7 +724,7 @@
         speedSelect.addEventListener('change', () => { speedStep = Number(speedSelect.value); try { localStorage.setItem(SPEED_STEP_KEY, String(speedStep)); } catch (e) {} });
         speedRow.appendChild(speedLabel); speedRow.appendChild(speedSelect); panel.appendChild(speedRow);
 
-        addFontControls(panel, null, qualitySelect.style.cssText, null);
+        addFontControls(panel, qualitySelect.style.cssText);
 
         const btnRow = document.createElement('div');
         btnRow.style.cssText = 'display: flex; gap: 8px; margin: 12px 8px 0 8px;';
@@ -740,10 +750,12 @@
 
         btnRow.appendChild(saveBtn); btnRow.appendChild(resetBtn); btnRow.appendChild(closeBtn); panel.appendChild(btnRow);
         resetBtn.addEventListener('click', () => {
-            const defaults = { smoothAnim:false, hideElements:false, wheelSpeed:false, translateComments:false, compactMode:false, autoQuality:false, speedHotkeys:false };
-            Object.assign(settings, defaults); selectedQuality = 'hd1080'; speedStep = 0.25;
-            const ids = { smoothAnim:'retube-smooth-anim', hideElements:'retube-hide-elements', wheelSpeed:'retube-wheel-speed', translateComments:'retube-translate-comments', compactMode:'retube-compact-mode', autoQuality:'retube-auto-quality', speedHotkeys:'retube-speed-hotkeys' };
-            Object.entries(ids).forEach(([key,id]) => { const cb = panel.querySelector('#' + id); if (cb) cb.checked = false; toggleFeature(key, false); });
+            featureCheckboxes.forEach(([checkbox, key]) => {
+                settings[key] = checkbox.checked = false;
+                toggleFeature(key, false);
+            });
+            selectedQuality = 'hd1080';
+            speedStep = 0.25;
             qualitySelect.value = selectedQuality; speedSelect.value = String(speedStep);
             try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); localStorage.setItem(QUALITY_KEY, selectedQuality); localStorage.setItem(SPEED_STEP_KEY, String(speedStep)); } catch (e) {}
             resetBtn.textContent = 'Сброшено ✓'; setTimeout(() => { resetBtn.textContent = 'Сбросить'; }, 1200);
@@ -751,13 +763,12 @@
         document.body.appendChild(panel);
         makeDraggable(panel, header);
 
-        cbAnim.addEventListener('change', (e) => { settings.smoothAnim = e.target.checked; toggleFeature('smoothAnim', e.target.checked); });
-        cbHide.addEventListener('change', (e) => { settings.hideElements = e.target.checked; toggleFeature('hideElements', e.target.checked); });
-        cbWheel.addEventListener('change', (e) => { settings.wheelSpeed = e.target.checked; toggleFeature('wheelSpeed', e.target.checked); });
-        cbTranslate.addEventListener('change', (e) => { settings.translateComments = e.target.checked; toggleFeature('translateComments', e.target.checked); });
-        cbCompact.addEventListener('change', (e) => { settings.compactMode = e.target.checked; toggleFeature('compactMode', e.target.checked); });
-        cbAutoQuality.addEventListener('change', (e) => { settings.autoQuality = e.target.checked; toggleFeature('autoQuality', e.target.checked); });
-        cbSpeedHotkeys.addEventListener('change', (e) => { settings.speedHotkeys = e.target.checked; toggleFeature('speedHotkeys', e.target.checked); });
+        featureCheckboxes.forEach(([checkbox, key]) => {
+            checkbox.addEventListener('change', e => {
+                settings[key] = e.target.checked;
+                toggleFeature(key, e.target.checked);
+            });
+        });
 
         saveBtn.addEventListener('click', () => {
             try {
