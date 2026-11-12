@@ -4065,7 +4065,9 @@ panel-item.searchmode-switcher-installed {
 }
 }
 
-* {
-  font-family: "Ubuntu Light", "Ubuntu", sans-serif !important;
-  font-weight: 300 !important;
+@media not -moz-pref("mod.disable.custom.font") {
+  * {
+    font-family: "Ubuntu Light", "Ubuntu", sans-serif !important;
+    font-weight: 300 !important;
+  }
 }

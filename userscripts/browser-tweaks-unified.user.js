@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Browser Tweaks — Ubuntu Light + YouTube
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.1.0
+// @version      1.1.1
 // @description  Глобальный шрифт Ubuntu Light и модульные инструменты YouTube в единой изолированной панели
 // @author       SolasFor
 // @homepageURL  https://github.com/SolasFor/Browser
@@ -30,6 +30,7 @@
     // ==========================================
 
     const FONT_URL = 'https://raw.githubusercontent.com/SolasFor/Browser/main/fonts/Ubuntu%20Light.woff2';
+    const FONT_ENABLED_KEY = 'unifiedUbuntuLightEnabled';
     const FONT_EXCLUDED_KEY = 'unifiedUbuntuLightExcludedHosts';
     const FONT_INTENSITY_KEY = 'unifiedUbuntuLightIntensity';
 
@@ -116,15 +117,7 @@
         return `url("${FONT_URL}") format("woff2")`;
     }
 
-    setManagedStyle('font-face', `
-        @font-face {
-            font-family: "Ubuntu Light Custom";
-            src: ${resolveFontSource()};
-            font-weight: 100 500;
-            font-style: normal;
-            font-display: swap;
-        }
-    `);
+    let fontEnabled = Boolean(gmGet(FONT_ENABLED_KEY, true));
 
     const getExcludedHosts = () => {
         const list = gmGet(FONT_EXCLUDED_KEY, []);
@@ -151,6 +144,22 @@
     ].join(', ');
 
     function applyGlobalFont() {
+        if (!fontEnabled) {
+            removeManagedStyle('global-font');
+            removeManagedStyle('font-face');
+            return;
+        }
+        if (!managedStyles.has('font-face')) {
+            setManagedStyle('font-face', `
+                @font-face {
+                    font-family: "Ubuntu Light Custom";
+                    src: ${resolveFontSource()};
+                    font-weight: 100 500;
+                    font-style: normal;
+                    font-display: swap;
+                }
+            `);
+        }
         if (isFontExcluded()) {
             removeManagedStyle('global-font');
             return;
@@ -176,6 +185,10 @@
     if (!isTopWindow) {
         if (typeof GM_addValueChangeListener === 'function') {
             try {
+                GM_addValueChangeListener(FONT_ENABLED_KEY, (_k, _oldV, newV) => {
+                    fontEnabled = Boolean(newV);
+                    applyGlobalFont();
+                });
                 GM_addValueChangeListener(FONT_EXCLUDED_KEY, () => applyGlobalFont());
                 GM_addValueChangeListener(FONT_INTENSITY_KEY, (_k, _oldV, newV) => {
                     if (newV === 'soft' || newV === 'strong') fontIntensity = newV;
@@ -202,6 +215,12 @@
     const SHADOW_CSS = `
         :host {
             all: initial;
+            --bt-font: "Ubuntu Light Custom", "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+            --bt-weight: 300;
+        }
+        :host([data-custom-font="off"]) {
+            --bt-font: system-ui, -apple-system, "Segoe UI", sans-serif;
+            --bt-weight: 400;
         }
         *, *::before, *::after {
             box-sizing: border-box;
@@ -217,7 +236,10 @@
             padding: 9px 18px;
             border-radius: 9px;
             border: 1px solid rgba(155, 172, 205, 0.25);
-            font: 300 14px/1.35 "Ubuntu Light Custom", "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: var(--bt-font);
+            font-weight: var(--bt-weight);
+            font-size: 14px;
+            line-height: 1.35;
             letter-spacing: 0.01em;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
             backdrop-filter: blur(10px);
@@ -246,7 +268,10 @@
             color: #f0f4fa;
             border: 1px solid rgba(160, 175, 205, 0.24);
             border-radius: 10px;
-            font: 300 13px/1.45 "Ubuntu Light Custom", "Ubuntu", system-ui, sans-serif;
+            font-family: var(--bt-font);
+            font-weight: var(--bt-weight);
+            font-size: 13px;
+            line-height: 1.45;
             white-space: pre-line;
             box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
             backdrop-filter: blur(10px);
@@ -274,7 +299,10 @@
             color: #e6ebf4;
             border: 1px solid rgba(160, 175, 205, 0.26);
             border-radius: 14px;
-            font: 300 13.5px/1.4 "Ubuntu Light Custom", "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: var(--bt-font);
+            font-weight: var(--bt-weight);
+            font-size: 13.5px;
+            line-height: 1.4;
             box-shadow: 0 14px 40px rgba(0, 0, 0, 0.42);
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
@@ -472,7 +500,23 @@
         .bt-actions .bt-btn {
             flex: 1;
         }
+        .bt-font-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            transition: opacity 0.15s ease;
+        }
+        .bt-font-controls.disabled {
+            opacity: 0.48;
+        }
+        .bt-btn:disabled, .bt-select:disabled {
+            cursor: not-allowed;
+        }
     `;
+
+    function syncHostFontState() {
+        if (uiHost) uiHost.setAttribute('data-custom-font', fontEnabled ? 'on' : 'off');
+    }
 
     function ensureShadowHost() {
         if (shadow && uiHost && uiHost.isConnected) return shadow;
@@ -483,6 +527,7 @@
             uiHost = document.createElement('div');
             uiHost.id = 'browser-tweaks-root';
             uiHost.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483646;pointer-events:none;';
+            syncHostFontState();
             shadow = uiHost.attachShadow({ mode: 'open' });
             const style = document.createElement('style');
             style.textContent = SHADOW_CSS;
@@ -548,17 +593,56 @@
     }
 
     function syncFontUI() {
+        syncHostFontState();
         if (!uiRefs) return;
         const excluded = isFontExcluded();
+        if (uiRefs.fontEnabledCb) {
+            uiRefs.fontEnabledCb.checked = fontEnabled;
+        }
+        if (uiRefs.fontControlsWrap) {
+            uiRefs.fontControlsWrap.classList.toggle('disabled', !fontEnabled);
+        }
         if (uiRefs.excludeBtn) {
+            uiRefs.excludeBtn.disabled = !fontEnabled;
             uiRefs.excludeBtn.textContent = excluded ? 'Включить на этом сайте' : 'Исключить этот сайт';
         }
         if (uiRefs.intensitySelect) {
+            uiRefs.intensitySelect.disabled = !fontEnabled;
             uiRefs.intensitySelect.value = fontIntensity;
+        }
+        if (uiRefs.fontNote) {
+            uiRefs.fontNote.textContent = fontEnabled
+                ? 'Действует на всех сайтах. Alt + Shift + F — выключить полностью; Alt + Shift + U — исключить этот сайт.'
+                : 'Кастомный шрифт полностью выключен на всех сайтах и в панели. Alt + Shift + F — включить обратно.';
         }
     }
 
+    function setGlobalFontEnabled(nextEnabled, showFeedback = true) {
+        fontEnabled = Boolean(nextEnabled);
+        gmSet(FONT_ENABLED_KEY, fontEnabled);
+        applyGlobalFont();
+        syncFontUI();
+        if (isYouTube && ytSettings.translateComments) applyTranslateUIStyle();
+        if (showFeedback) {
+            showOSD(
+                fontEnabled ? 'Кастомный шрифт: ВКЛЮЧЁН глобально' : 'Кастомный шрифт: полностью ВЫКЛЮЧЕН',
+                fontEnabled ? 'on' : 'off'
+            );
+        }
+        return fontEnabled;
+    }
+
+    function toggleGlobalFontEnabled(showFeedback = true) {
+        return setGlobalFontEnabled(!fontEnabled, showFeedback);
+    }
+
     function toggleFontExclusion(showFeedback = true) {
+        if (!fontEnabled) {
+            if (showFeedback) {
+                showOSD('Кастомный шрифт выключен глобально (Alt + Shift + F — включить)', 'off');
+            }
+            return true;
+        }
         if (!host) return true;
         const excluded = isFontExcluded();
         const hosts = getExcludedHosts();
@@ -1107,12 +1191,15 @@
         });
     }
 
-    function scanCommentsForTranslation() {
+    function applyTranslateUIStyle() {
+        const uiFont = fontEnabled
+            ? 'font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300;'
+            : 'font-family: Roboto, Arial, system-ui, sans-serif; font-weight: 400;';
         setManagedStyle('yt-translate-ui', `
             .retube-translate-wrapper { margin-top: 6px; }
             .retube-translate-btn {
                 display: inline-block; padding: 3px 10px; font-size: 12px;
-                font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300;
+                ${uiFont}
                 background: rgba(96, 100, 110, 0.37); color: rgb(201, 208, 211);
                 border: 1px solid rgb(72, 75, 91); border-radius: 10px; cursor: pointer;
                 transition: background 0.2s ease, color 0.2s ease;
@@ -1122,9 +1209,13 @@
                 display: none; margin-top: 8px; padding: 10px 12px;
                 background: rgba(87, 133, 186, 0.12); border-left: 3px solid rgba(122, 163, 212, 0.7);
                 border-radius: 6px; font-size: 14px; line-height: 1.5; color: #ddd;
-                white-space: pre-wrap; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300;
+                white-space: pre-wrap; ${uiFont}
             }
         `);
+    }
+
+    function scanCommentsForTranslation() {
+        applyTranslateUIStyle();
 
         const comments = document.querySelectorAll('ytd-comment-view-model #content-text, ytd-comment-renderer #content-text');
         comments.forEach(textEl => {
@@ -1429,6 +1520,25 @@
         fontTitle.textContent = 'Глобальный шрифт Ubuntu Light';
         fontCard.appendChild(fontTitle);
 
+        const fontToggleRow = document.createElement('label');
+        fontToggleRow.className = 'bt-row-check';
+        fontToggleRow.style.padding = '4px 6px';
+        const fontEnabledCb = document.createElement('input');
+        fontEnabledCb.type = 'checkbox';
+        fontEnabledCb.checked = fontEnabled;
+        const fontEnabledLabel = document.createElement('span');
+        fontEnabledLabel.textContent = 'Включить кастомный шрифт';
+        fontToggleRow.append(fontEnabledCb, fontEnabledLabel);
+        fontEnabledCb.addEventListener('change', () => {
+            setGlobalFontEnabled(fontEnabledCb.checked, true);
+        });
+        uiRefs.fontEnabledCb = fontEnabledCb;
+        fontCard.appendChild(fontToggleRow);
+
+        const fontControlsWrap = document.createElement('div');
+        fontControlsWrap.className = 'bt-font-controls';
+        uiRefs.fontControlsWrap = fontControlsWrap;
+
         const intensityRow = document.createElement('div');
         intensityRow.className = 'bt-select-row';
         intensityRow.style.padding = '0';
@@ -1454,18 +1564,19 @@
         });
         uiRefs.intensitySelect = intensitySelect;
         intensityRow.append(intensityLabel, intensitySelect);
-        fontCard.appendChild(intensityRow);
+        fontControlsWrap.appendChild(intensityRow);
 
         const excludeBtn = document.createElement('button');
         excludeBtn.type = 'button';
         excludeBtn.className = 'bt-btn';
         excludeBtn.addEventListener('click', () => toggleFontExclusion(true));
         uiRefs.excludeBtn = excludeBtn;
-        fontCard.appendChild(excludeBtn);
+        fontControlsWrap.appendChild(excludeBtn);
+        fontCard.appendChild(fontControlsWrap);
 
         const fontNote = document.createElement('div');
         fontNote.className = 'bt-note';
-        fontNote.textContent = 'Действует на всех сайтах. Быстрое переключение для текущего домена: Alt + Shift + U.';
+        uiRefs.fontNote = fontNote;
         fontCard.appendChild(fontNote);
         body.appendChild(fontCard);
 
@@ -1534,6 +1645,11 @@
     // ==========================================
 
     window.addEventListener('keydown', e => {
+        if (e.altKey && e.shiftKey && e.code === 'KeyF' && !e.repeat && !e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            toggleGlobalFontEnabled(true);
+            return;
+        }
         if (e.altKey && e.shiftKey && e.code === 'KeyU' && !e.repeat && !e.ctrlKey && !e.metaKey) {
             e.preventDefault();
             toggleFontExclusion(true);
@@ -1556,12 +1672,20 @@
     if (typeof GM_registerMenuCommand === 'function') {
         try {
             GM_registerMenuCommand('Открыть / закрыть панель настроек (F2)', () => togglePanel());
-            GM_registerMenuCommand('Вкл / выкл Ubuntu Light на этом сайте (Alt+Shift+U)', () => toggleFontExclusion(true));
+            GM_registerMenuCommand('Вкл / выкл кастомный шрифт полностью (Alt+Shift+F)', () => toggleGlobalFontEnabled(true));
+            GM_registerMenuCommand('Исключить / вернуть текущий сайт (Alt+Shift+U)', () => toggleFontExclusion(true));
         } catch (_) {}
     }
 
     if (typeof GM_addValueChangeListener === 'function') {
         try {
+            GM_addValueChangeListener(FONT_ENABLED_KEY, (_k, _oldV, newV, remote) => {
+                if (!remote) return;
+                fontEnabled = Boolean(newV);
+                applyGlobalFont();
+                syncFontUI();
+                if (isYouTube && ytSettings.translateComments) applyTranslateUIStyle();
+            });
             GM_addValueChangeListener(FONT_EXCLUDED_KEY, (_k, _oldV, _newV, remote) => {
                 if (!remote) return;
                 applyGlobalFont();
