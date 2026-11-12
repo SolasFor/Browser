@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Browser Tweaks — Ubuntu Light + YouTube
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.2.0
-// @description  Глобальный шрифт Ubuntu Light и модульные инструменты YouTube в единой изолированной панели
+// @version      1.3.0
+// @description  Глобальный шрифт Ubuntu Light, универсальные инструменты браузера и модули YouTube в единой панели
 // @author       SolasFor
 // @homepageURL  https://github.com/SolasFor/Browser
 // @supportURL   https://github.com/SolasFor/Browser/issues
@@ -29,15 +29,20 @@
     // 0. КОНСТАНТЫ, СРЕДА И МЕНЕДЖЕР СТИЛЕЙ
     // ==========================================
 
-    const SCRIPT_VERSION = '1.2.0';
+    const SCRIPT_VERSION = '1.3.0';
     const FONT_URL = 'https://raw.githubusercontent.com/SolasFor/Browser/main/fonts/Ubuntu%20Light.woff2';
     const FONT_ENABLED_KEY = 'unifiedUbuntuLightEnabled';
     const FONT_EXCLUDED_KEY = 'unifiedUbuntuLightExcludedHosts';
     const FONT_INTENSITY_KEY = 'unifiedUbuntuLightIntensity';
+    const FONT_SITE_INTENSITY_KEY = 'unifiedUbuntuLightSiteIntensity';
+
+    const GLOBAL_SETTINGS_KEY = 'bt_global_settings';
+    const PANEL_HOTKEY_KEY = 'bt_panel_hotkey';
 
     const YT_SETTINGS_KEY = 'bt_youtube_settings';
     const YT_QUALITY_KEY = 'bt_youtube_quality';
     const YT_SPEED_STEP_KEY = 'bt_youtube_speed_step';
+    const YT_CHANNEL_SPEEDS_KEY = 'bt_youtube_channel_speeds';
     const PANEL_POS_KEY = 'bt_panel_position';
     const TRANSLATION_CACHE_KEY = 'bt_translation_cache';
     const MIGRATION_KEY = 'bt_migrated_v110';
@@ -159,11 +164,46 @@
         if (savedIntensity === 'soft' || savedIntensity === 'strong') fontIntensity = savedIntensity;
     }
 
+    function getSiteIntensityMap() {
+        const raw = gmGet(FONT_SITE_INTENSITY_KEY, null);
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const clean = {};
+        Object.entries(raw).forEach(([k, v]) => {
+            const norm = normalizeHostInput(k);
+            if (norm && (v === 'soft' || v === 'strong')) clean[norm] = v;
+        });
+        return clean;
+    }
+
+    function getMatchedSiteIntensityEntry() {
+        if (!host) return null;
+        const map = getSiteIntensityMap();
+        if (map[host]) return { domain: host, intensity: map[host] };
+        let bestDomain = '';
+        let bestVal = null;
+        Object.entries(map).forEach(([domain, val]) => {
+            if (matchesHost(domain) && domain.length > bestDomain.length) {
+                bestDomain = domain;
+                bestVal = val;
+            }
+        });
+        return bestVal ? { domain: bestDomain, intensity: bestVal } : null;
+    }
+
+    function getEffectiveFontIntensity() {
+        const matched = getMatchedSiteIntensityEntry();
+        return matched ? matched.intensity : fontIntensity;
+    }
+
     const PROTECTED_FONT_SELECTOR = [
         'svg', 'svg *',
+        'math', 'math *', 'mjx-container', 'mjx-container *',
+        '.katex', '.katex *', '.MathJax', '.MathJax *', '.MathJax_Display', '.MathJax_Display *',
+        '[class*="mathjax" i]',
         'code', 'code *', 'pre', 'pre *', 'kbd', 'kbd *', 'samp', 'samp *', 'var', 'tt',
         '.monaco-editor', '.monaco-editor *', '.cm-editor', '.cm-editor *',
         '.ace_editor', '.ace_editor *', '.CodeMirror', '.CodeMirror *',
+        '.xterm', '.xterm *', '.terminal', '.terminal *',
         '[role="img"]', '[data-icon]',
         '[class*="icon" i]', '[class*="material" i]', '[class*="glyph" i]',
         '[class*="fa-" i]', '[class*="bi-" i]', '[class*="ri-" i]',
@@ -191,8 +231,9 @@
             removeManagedStyle('global-font');
             return;
         }
-        const textWeight = fontIntensity === 'strong' ? '300' : '350';
-        const boldWeight = fontIntensity === 'strong' ? '400' : '500';
+        const effectiveIntensity = getEffectiveFontIntensity();
+        const textWeight = effectiveIntensity === 'strong' ? '300' : '350';
+        const boldWeight = effectiveIntensity === 'strong' ? '400' : '500';
         setManagedStyle('global-font', `
             body,
             body :is(p, span, div, a, li, td, th, label, button, input, textarea, select, h1, h2, h3, h4, h5, h6, blockquote, figcaption, summary, legend, small, strong, em, b, i):not(${PROTECTED_FONT_SELECTOR}) {
@@ -208,7 +249,7 @@
     applyGlobalFont();
 
     // Во вложенных фреймах применяем только шрифт и слушаем его синхронизацию между вкладками,
-    // не создавая дубликатов панелей F2, хоткеев и наблюдателей YouTube.
+    // не создавая дубликатов панелей, хоткеев и наблюдателей YouTube.
     if (!isTopWindow) {
         if (typeof GM_addValueChangeListener === 'function') {
             try {
@@ -217,6 +258,7 @@
                     applyGlobalFont();
                 });
                 GM_addValueChangeListener(FONT_EXCLUDED_KEY, () => applyGlobalFont());
+                GM_addValueChangeListener(FONT_SITE_INTENSITY_KEY, () => applyGlobalFont());
                 GM_addValueChangeListener(FONT_INTENSITY_KEY, (_k, _oldV, newV) => {
                     if (newV === 'soft' || newV === 'strong') fontIntensity = newV;
                     applyGlobalFont();
@@ -813,6 +855,83 @@
         });
     }
 
+    function getCurrentSiteFontMode() {
+        if (!host) return 'default';
+        if (isFontExcluded()) return 'excluded';
+        const matched = getMatchedSiteIntensityEntry();
+        return matched ? matched.intensity : 'default';
+    }
+
+    function setCurrentSiteFontMode(mode, showFeedback = true) {
+        if (!host) return;
+        const hosts = getExcludedHosts();
+        const siteMap = getSiteIntensityMap();
+
+        if (mode === 'excluded') {
+            Object.keys(siteMap).forEach(d => { if (matchesHost(d)) delete siteMap[d]; });
+            gmSet(FONT_SITE_INTENSITY_KEY, siteMap);
+            if (!hosts.some(matchesHost)) {
+                gmSet(FONT_EXCLUDED_KEY, [...new Set([...hosts, host])]);
+            }
+            applyGlobalFont();
+            syncFontUI();
+            if (showFeedback) showOSD(`Ubuntu Light: выключен для ${host}`, 'off');
+            return;
+        }
+
+        const nextHosts = hosts.filter(x => !matchesHost(x));
+        if (nextHosts.length !== hosts.length) {
+            gmSet(FONT_EXCLUDED_KEY, nextHosts);
+        }
+
+        Object.keys(siteMap).forEach(d => { if (matchesHost(d)) delete siteMap[d]; });
+        if (mode === 'soft' || mode === 'strong') {
+            siteMap[host] = mode;
+            gmSet(FONT_SITE_INTENSITY_KEY, siteMap);
+            applyGlobalFont();
+            syncFontUI();
+            if (showFeedback) {
+                const label = mode === 'soft' ? 'мягкая' : 'выраженная';
+                showOSD(`Ubuntu Light (${label}) для ${host}`, 'on');
+            }
+            return;
+        }
+
+        gmSet(FONT_SITE_INTENSITY_KEY, siteMap);
+        applyGlobalFont();
+        syncFontUI();
+        if (showFeedback) showOSD(`Ubuntu Light: по умолчанию для ${host}`, 'on');
+    }
+
+    const PANEL_HOTKEYS = {
+        F2: {
+            label: 'F2',
+            match: e => e.key === 'F2' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey
+        },
+        AltShiftB: {
+            label: 'Alt + Shift + B',
+            match: e => e.altKey && e.shiftKey && e.code === 'KeyB' && !e.ctrlKey && !e.metaKey
+        },
+        AltShiftM: {
+            label: 'Alt + Shift + M',
+            match: e => e.altKey && e.shiftKey && e.code === 'KeyM' && !e.ctrlKey && !e.metaKey
+        },
+        CtrlShiftF2: {
+            label: 'Ctrl + Shift + F2',
+            match: e => e.key === 'F2' && e.ctrlKey && e.shiftKey && !e.altKey && !e.metaKey
+        }
+    };
+
+    let panelHotkey = 'F2';
+    {
+        const savedHotkey = gmGet(PANEL_HOTKEY_KEY, 'F2');
+        if (PANEL_HOTKEYS[savedHotkey]) panelHotkey = savedHotkey;
+    }
+
+    function getPanelHotkeyLabel() {
+        return (PANEL_HOTKEYS[panelHotkey] || PANEL_HOTKEYS.F2).label;
+    }
+
     function syncFontUI() {
         syncHostFontState();
         if (!uiRefs) return;
@@ -831,9 +950,13 @@
             uiRefs.intensitySelect.disabled = !fontEnabled;
             uiRefs.intensitySelect.value = fontIntensity;
         }
+        if (uiRefs.siteModeSelect) {
+            uiRefs.siteModeSelect.disabled = !fontEnabled || !host;
+            uiRefs.siteModeSelect.value = getCurrentSiteFontMode();
+        }
         if (uiRefs.fontNote) {
             uiRefs.fontNote.textContent = fontEnabled
-                ? 'Действует на всех сайтах. Alt + Shift + F — выключить полностью; Alt + Shift + U — исключить этот сайт.'
+                ? 'Защищены формулы KaTeX/MathJax, код и терминалы. Alt + Shift + F — выкл. везде; Alt + Shift + U — исключить сайт.'
                 : 'Кастомный шрифт полностью выключен на всех сайтах и в панели. Alt + Shift + F — включить обратно.';
         }
         renderExcludedHostsList();
@@ -975,8 +1098,30 @@
     }
 
     // ==========================================
-    // 3. СОСТОЯНИЕ И МИГРАЦИЯ НАСТРОЕК YOUTUBE
+    // 3. СОСТОЯНИЕ ГЛОБАЛЬНЫХ ИНСТРУМЕНТОВ И YOUTUBE
     // ==========================================
+
+    const DEFAULT_GLOBAL_SETTINGS = {
+        globalVideoSpeed: false,
+        globalPiPHotkey: false,
+        cleanTrackingUrl: false
+    };
+
+    const GLOBAL_TOOLTIPS = {
+        globalVideoSpeed: 'Включает управление скоростью любого HTML5-видео на всех сайтах:\n• Shift + колесо мыши над плеером\n• Ctrl + ↑ / ↓ / 0 с клавиатуры',
+        globalPiPHotkey: 'Переключает режим «Картинка в картинке» (Picture-in-Picture) для активного видео клавишами Alt + P.',
+        cleanTrackingUrl: 'Тихо удаляет трекинговые параметры (utm_*, fbclid, yclid, gclid, igshid, si на YouTube) из адресной строки и копируемых ссылок без перезагрузки.'
+    };
+
+    let globalSettings = Object.assign({}, DEFAULT_GLOBAL_SETTINGS);
+    {
+        const storedGlobal = gmGet(GLOBAL_SETTINGS_KEY, null);
+        if (storedGlobal && typeof storedGlobal === 'object' && !Array.isArray(storedGlobal)) {
+            Object.keys(DEFAULT_GLOBAL_SETTINGS).forEach(k => {
+                if (typeof storedGlobal[k] === 'boolean') globalSettings[k] = storedGlobal[k];
+            });
+        }
+    }
 
     const HIDE_SUBKEYS = [
         ['hidePlayerClutter', 'Элементы и оверлеи плеера'],
@@ -998,7 +1143,11 @@
         translateComments: false,
         compactMode: false,
         autoQuality: false,
-        speedHotkeys: false
+        speedHotkeys: false,
+        videoScreenshot: false,
+        autoTheater: false,
+        focusMode: false,
+        rememberChannelSpeed: false
     };
 
     const QUALITY_MAP = {
@@ -1015,12 +1164,20 @@
         translateComments: 'Добавляет кнопку «Перевести» под комментариями на иностранных языках (Google Translate с кэшем).',
         compactMode: 'Уменьшает отступы сетки видео, комментариев и высоту верхней шапки YouTube.',
         autoQuality: 'Автоматически выбирает заданное качество (или ближайшее доступное) при открытии каждого ролика.',
-        speedHotkeys: 'Горячие клавиши во время просмотра ролика:\n• Ctrl + ↑ — ускорить\n• Ctrl + ↓ — замедлить\n• Ctrl + 0 — вернуть 1.00×'
+        speedHotkeys: 'Горячие клавиши во время просмотра ролика:\n• Ctrl + ↑ — ускорить\n• Ctrl + ↓ — замедлить\n• Ctrl + 0 — вернуть 1.00×',
+        videoScreenshot: 'Добавляет кнопку камеры в плеер YouTube и сочетание Alt + Shift + S для сохранения чистого кадра видео в нативном разрешении (PNG + буфер обмена).',
+        autoTheater: 'Автоматически раскрывает широкий плеер (режим кинотеатра) при открытии видео на YouTube.',
+        focusMode: 'Скрывает правую колонку рекомендаций (#related) и конечные заставки во время просмотра, чтобы ничего не отвлекало.',
+        rememberChannelSpeed: 'Запоминает выбранную скорость отдельно для каждого канала YouTube и автоматически восстанавливает её на новых роликах автора.'
     };
 
     let ytSettings = Object.assign({}, DEFAULT_YT_SETTINGS);
     let selectedQuality = 'hd1080';
     let speedStep = 0.25;
+    {
+        const initialStep = Number(gmGet(YT_SPEED_STEP_KEY, 0.25));
+        if ([0.05, 0.1, 0.25, 0.5].includes(initialStep)) speedStep = initialStep;
+    }
 
     function migrateLegacyYouTubeStorage() {
         if (!isYouTube || gmGet(MIGRATION_KEY, false)) return;
@@ -1320,10 +1477,48 @@
         window.removeEventListener('playing', onVideoQualityEvent, true);
     }
 
-    // --- 4.2. Скорость воспроизведения (колесо и клавиатура) ---
+    // --- 4.2. Скорость воспроизведения (YouTube и универсальный HTML5), память по каналам и PiP ---
 
     let speedHotkeyHandler = null;
     let wheelSpeedHandler = null;
+    let pipHotkeyHandler = null;
+    let channelSpeedTimers = [];
+    let lastAppliedChannelSpeedToken = '';
+    let channelSpeedActive = false;
+
+    function getChannelSpeedsMap() {
+        const raw = gmGet(YT_CHANNEL_SPEEDS_KEY, null);
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const clean = {};
+        Object.entries(raw).forEach(([k, v]) => {
+            const num = Number(v);
+            if (typeof k === 'string' && k && Number.isFinite(num) && num >= 0.25 && num <= 4) {
+                clean[k] = Math.round(num * 100) / 100;
+            }
+        });
+        return clean;
+    }
+
+    function saveChannelSpeedsMap(map) {
+        const entries = Object.entries(map).slice(-200);
+        gmSet(YT_CHANNEL_SPEEDS_KEY, Object.fromEntries(entries));
+    }
+
+    function getCurrentYouTubeChannelKey() {
+        if (!isYouTube) return '';
+        const link = document.querySelector(
+            'ytd-watch-metadata ytd-video-owner-renderer a.yt-simple-endpoint[href], #owner ytd-video-owner-renderer a.yt-simple-endpoint[href], #upload-info #channel-name a[href]'
+        );
+        if (!link) return '';
+        try {
+            const parsed = new URL(link.getAttribute('href') || link.href, location.origin);
+            const path = decodeURIComponent(parsed.pathname || '').trim().toLowerCase().replace(/\/+$/, '');
+            if (path.startsWith('/@') || path.startsWith('/channel/') || path.startsWith('/c/') || path.startsWith('/user/')) {
+                return path;
+            }
+        } catch (_) {}
+        return '';
+    }
 
     function getActiveWatchVideo() {
         const path = location.pathname || '';
@@ -1336,29 +1531,143 @@
         return candidates.find(v => !v.paused) || null;
     }
 
-    function applyPlaybackRate(video, rate) {
+    function getActiveGenericVideo() {
+        if (isYouTube) return getActiveWatchVideo();
+        const videos = Array.from(document.querySelectorAll('video')).filter(v => {
+            const rect = v.getBoundingClientRect();
+            return rect.width >= 120 && rect.height >= 80;
+        });
+        if (!videos.length) return null;
+        const playing = videos.find(v => !v.paused && !v.ended);
+        if (playing) return playing;
+        const ready = videos.find(v => v.readyState > 0);
+        if (ready) return ready;
+        videos.sort((a, b) => (b.offsetWidth * b.offsetHeight) - (a.offsetWidth * a.offsetHeight));
+        return videos[0];
+    }
+
+    function findVideoAtPoint(clientX, clientY, eventTarget) {
+        if (isYouTube) {
+            const player = document.querySelector('#movie_player, .html5-video-player');
+            if (player && player.contains(eventTarget)) {
+                return player.querySelector('video') || document.querySelector('video');
+            }
+            if (!globalSettings.globalVideoSpeed) return null;
+        }
+        const videos = Array.from(document.querySelectorAll('video'));
+        for (let i = 0; i < videos.length; i++) {
+            const v = videos[i];
+            if (isYouTube && v.closest('ytd-moving-thumbnail-renderer, #inline-preview-player')) continue;
+            const rect = v.getBoundingClientRect();
+            if (rect.width < 120 || rect.height < 80) continue;
+            if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
+                return v;
+            }
+        }
+        return null;
+    }
+
+    function isEditableEventTarget(e) {
+        const composed = typeof e.composedPath === 'function' ? e.composedPath() : null;
+        const target = (composed && composed[0]) || e.target;
+        return Boolean(target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)));
+    }
+
+    function applyPlaybackRate(video, rate, fromUser = true) {
         const clamped = Math.round(Math.max(0.25, Math.min(4, rate)) * 100) / 100;
         video.playbackRate = clamped;
+
+        if (fromUser && isYouTube && ytSettings.rememberChannelSpeed) {
+            const chKey = getCurrentYouTubeChannelKey();
+            if (chKey) {
+                const map = getChannelSpeedsMap();
+                const hadSaved = Object.prototype.hasOwnProperty.call(map, chKey);
+                if (Math.abs(clamped - 1) < 0.001) {
+                    if (hadSaved) {
+                        delete map[chKey];
+                        saveChannelSpeedsMap(map);
+                        showOSD('Скорость: 1.00× (сброшено для канала)');
+                        return;
+                    }
+                } else {
+                    map[chKey] = clamped;
+                    saveChannelSpeedsMap(map);
+                    showOSD('Скорость: ' + clamped.toFixed(2) + '× (канал запомнен)');
+                    return;
+                }
+            }
+        }
         showOSD('Скорость: ' + clamped.toFixed(2) + '×');
+    }
+
+    function restoreSavedChannelSpeed() {
+        if (!channelSpeedActive || !isYouTube || !ytSettings.rememberChannelSpeed) return;
+        if (!/^\/(watch|live)\b/.test(location.pathname || '')) return;
+        const video = getActiveWatchVideo();
+        const chKey = getCurrentYouTubeChannelKey();
+        if (!video || !chKey) return;
+
+        const vidParam = new URLSearchParams(location.search).get('v') || location.pathname;
+        const token = vidParam + '|' + chKey;
+        if (lastAppliedChannelSpeedToken === token) return;
+        lastAppliedChannelSpeedToken = token;
+
+        const map = getChannelSpeedsMap();
+        const targetRate = Object.prototype.hasOwnProperty.call(map, chKey) ? map[chKey] : 1;
+        if (Math.abs((video.playbackRate || 1) - targetRate) > 0.005) {
+            video.playbackRate = targetRate;
+            if (Math.abs(targetRate - 1) >= 0.005) {
+                showOSD('Скорость канала: ' + targetRate.toFixed(2) + '×');
+            }
+        }
+    }
+
+    function scheduleChannelSpeedRestore() {
+        if (!channelSpeedActive) return;
+        channelSpeedTimers.forEach(t => clearTimeout(t));
+        channelSpeedTimers = [
+            setTimeout(restoreSavedChannelSpeed, 220),
+            setTimeout(restoreSavedChannelSpeed, 850),
+            setTimeout(restoreSavedChannelSpeed, 1800)
+        ];
+    }
+
+    function onChannelSpeedNavigate() {
+        lastAppliedChannelSpeedToken = '';
+        scheduleChannelSpeedRestore();
+    }
+
+    function applyChannelSpeedMemory() {
+        if (channelSpeedActive) return;
+        channelSpeedActive = true;
+        window.addEventListener('yt-navigate-finish', onChannelSpeedNavigate);
+        window.addEventListener('yt-page-data-updated', scheduleChannelSpeedRestore);
+        scheduleChannelSpeedRestore();
+    }
+
+    function removeChannelSpeedMemory() {
+        channelSpeedActive = false;
+        channelSpeedTimers.forEach(t => clearTimeout(t));
+        channelSpeedTimers = [];
+        window.removeEventListener('yt-navigate-finish', onChannelSpeedNavigate);
+        window.removeEventListener('yt-page-data-updated', scheduleChannelSpeedRestore);
     }
 
     function applySpeedHotkeys() {
         if (speedHotkeyHandler) return;
         speedHotkeyHandler = function (e) {
             if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
-            const composed = typeof e.composedPath === 'function' ? e.composedPath() : null;
-            const target = (composed && composed[0]) || e.target;
-            if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+            if (isEditableEventTarget(e)) return;
             if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== '0') return;
 
-            const video = getActiveWatchVideo();
+            const video = (isYouTube && ytSettings.speedHotkeys) ? getActiveWatchVideo() : getActiveGenericVideo();
             if (!video) return;
 
             e.preventDefault();
             const current = video.playbackRate || 1;
-            if (e.key === 'ArrowUp') applyPlaybackRate(video, current + speedStep);
-            else if (e.key === 'ArrowDown') applyPlaybackRate(video, current - speedStep);
-            else applyPlaybackRate(video, 1);
+            if (e.key === 'ArrowUp') applyPlaybackRate(video, current + speedStep, true);
+            else if (e.key === 'ArrowDown') applyPlaybackRate(video, current - speedStep, true);
+            else applyPlaybackRate(video, 1, true);
         };
         window.addEventListener('keydown', speedHotkeyHandler, true);
     }
@@ -1373,14 +1682,14 @@
         if (wheelSpeedHandler) return;
         wheelSpeedHandler = function (e) {
             if (!e.shiftKey) return;
-            const player = document.querySelector('#movie_player, .html5-video-player');
-            if (!player || !player.contains(e.target)) return;
-            const video = player.querySelector('video') || document.querySelector('video');
+            const composed = typeof e.composedPath === 'function' ? e.composedPath() : null;
+            if (uiHost && composed && composed.includes(uiHost)) return;
+            const video = findVideoAtPoint(e.clientX, e.clientY, e.target);
             if (!video) return;
             e.preventDefault();
             e.stopPropagation();
             const delta = e.deltaY > 0 ? -speedStep : speedStep;
-            applyPlaybackRate(video, (video.playbackRate || 1) + delta);
+            applyPlaybackRate(video, (video.playbackRate || 1) + delta, true);
         };
         window.addEventListener('wheel', wheelSpeedHandler, { passive: false, capture: true });
     }
@@ -1389,6 +1698,380 @@
         if (!wheelSpeedHandler) return;
         window.removeEventListener('wheel', wheelSpeedHandler, { capture: true });
         wheelSpeedHandler = null;
+    }
+
+    function togglePictureInPicture() {
+        if (document.pictureInPictureElement && typeof document.exitPictureInPicture === 'function') {
+            document.exitPictureInPicture().then(
+                () => showOSD('Картинка в картинке: выключена'),
+                () => showOSD('Не удалось закрыть PiP', 'off')
+            );
+            return true;
+        }
+        const video = getActiveGenericVideo();
+        if (!video) return false;
+        if (typeof video.requestPictureInPicture === 'function') {
+            try {
+                video.disablePictureInPicture = false;
+                video.removeAttribute('disablepictureinpicture');
+            } catch (_) {}
+            video.requestPictureInPicture().then(
+                () => showOSD('Картинка в картинке: включена', 'on'),
+                () => showOSD('Браузер заблокировал запуск PiP', 'off')
+            );
+            return true;
+        }
+        if (typeof video.webkitSetPresentationMode === 'function') {
+            const nextMode = video.webkitPresentationMode === 'picture-in-picture' ? 'inline' : 'picture-in-picture';
+            video.webkitSetPresentationMode(nextMode);
+            showOSD('Картинка в картинке: переключена', 'on');
+            return true;
+        }
+        showOSD('В Firefox для PiP используйте Ctrl + Shift + ]', 'off');
+        return true;
+    }
+
+    function applyPiPHotkey() {
+        if (pipHotkeyHandler) return;
+        pipHotkeyHandler = function (e) {
+            if (!e.altKey || e.shiftKey || e.ctrlKey || e.metaKey || e.repeat || e.code !== 'KeyP') return;
+            if (isEditableEventTarget(e)) return;
+            const video = document.pictureInPictureElement || getActiveGenericVideo();
+            if (!video) return;
+            e.preventDefault();
+            togglePictureInPicture();
+        };
+        window.addEventListener('keydown', pipHotkeyHandler, true);
+    }
+
+    function removePiPHotkey() {
+        if (!pipHotkeyHandler) return;
+        window.removeEventListener('keydown', pipHotkeyHandler, true);
+        pipHotkeyHandler = null;
+    }
+
+    // --- 4.2b. Скриншот чистого кадра YouTube, авто-широкий плеер и режим фокуса ---
+
+    let screenshotHotkeyHandler = null;
+    let screenshotBtnTimer = null;
+    let screenshotNavBound = false;
+    let autoTheaterActive = false;
+    let autoTheaterTimers = [];
+    let lastAutoTheaterVideoKey = '';
+
+    function formatVideoTimeSlug(sec) {
+        const total = Math.max(0, Math.floor(Number(sec) || 0));
+        const h = Math.floor(total / 3600);
+        const m = Math.floor((total % 3600) / 60);
+        const s = total % 60;
+        const pad = n => String(n).padStart(2, '0');
+        return h > 0 ? `${pad(h)}h${pad(m)}m${pad(s)}s` : `${pad(m)}m${pad(s)}s`;
+    }
+
+    function captureYouTubeVideoFrame() {
+        const video = getActiveWatchVideo();
+        if (!video || !video.videoWidth || !video.videoHeight) {
+            showOSD('Видео ещё не готово для снимка кадра', 'off');
+            return false;
+        }
+        try {
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, w, h);
+
+            const vidId = (new URLSearchParams(location.search).get('v') || 'video').replace(/[^a-zA-Z0-9_-]/g, '');
+            const filename = `youtube-frame-${vidId || 'video'}-${formatVideoTimeSlug(video.currentTime)}.png`;
+
+            canvas.toBlob(blob => {
+                if (!blob) {
+                    showOSD('Не удалось сформировать PNG кадра', 'off');
+                    return;
+                }
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                link.style.display = 'none';
+                (document.body || document.documentElement).appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) {} }, 1800);
+
+                if (navigator.clipboard && typeof navigator.clipboard.write === 'function' && typeof ClipboardItem !== 'undefined') {
+                    navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]).then(
+                        () => showOSD(`Кадр сохранён и скопирован (${w}×${h})`, 'on'),
+                        () => showOSD(`Кадр сохранён в PNG (${w}×${h})`, 'on')
+                    );
+                } else {
+                    showOSD(`Кадр сохранён в PNG (${w}×${h})`, 'on');
+                }
+            }, 'image/png');
+            return true;
+        } catch (_) {
+            showOSD('Не удалось захватить кадр видео', 'off');
+            return false;
+        }
+    }
+
+    function ensureYouTubeScreenshotButton() {
+        if (!isYouTube || !ytSettings.videoScreenshot) return;
+        const rightControls = document.querySelector('#movie_player .ytp-right-controls');
+        if (!rightControls || rightControls.querySelector('.bt-ytp-screenshot-btn')) return;
+
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ytp-button bt-ytp-screenshot-btn';
+        btn.title = 'Скриншот кадра (Alt + Shift + S)';
+        btn.setAttribute('aria-label', 'Скриншот кадра');
+        const svgNS = 'http://www.w3.org/2000/svg';
+        const svg = document.createElementNS(svgNS, 'svg');
+        svg.setAttribute('viewBox', '0 0 24 24');
+        svg.setAttribute('width', '22');
+        svg.setAttribute('height', '22');
+        svg.setAttribute('fill', 'none');
+        svg.setAttribute('stroke', 'currentColor');
+        svg.setAttribute('stroke-width', '1.9');
+        svg.setAttribute('stroke-linecap', 'round');
+        svg.setAttribute('stroke-linejoin', 'round');
+        const path = document.createElementNS(svgNS, 'path');
+        path.setAttribute('d', 'M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z');
+        const circle = document.createElementNS(svgNS, 'circle');
+        circle.setAttribute('cx', '12');
+        circle.setAttribute('cy', '13');
+        circle.setAttribute('r', '4');
+        svg.append(path, circle);
+        btn.appendChild(svg);
+
+        btn.addEventListener('click', e => {
+            e.preventDefault();
+            e.stopPropagation();
+            captureYouTubeVideoFrame();
+        });
+        rightControls.insertBefore(btn, rightControls.firstChild);
+    }
+
+    function scheduleScreenshotButtonMount() {
+        if (!ytSettings.videoScreenshot) return;
+        ensureYouTubeScreenshotButton();
+        clearTimeout(screenshotBtnTimer);
+        screenshotBtnTimer = setTimeout(ensureYouTubeScreenshotButton, 700);
+    }
+
+    function applyVideoScreenshotFeature() {
+        setManagedStyle('yt-screenshot-btn', `
+            .bt-ytp-screenshot-btn {
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                vertical-align: top !important;
+                color: #fff !important;
+                opacity: 0.9;
+                transition: opacity 0.15s ease;
+            }
+            .bt-ytp-screenshot-btn:hover {
+                opacity: 1;
+            }
+        `);
+        if (!screenshotHotkeyHandler) {
+            screenshotHotkeyHandler = function (e) {
+                if (!e.altKey || !e.shiftKey || e.ctrlKey || e.metaKey || e.repeat || e.code !== 'KeyS') return;
+                if (isEditableEventTarget(e)) return;
+                const video = getActiveWatchVideo();
+                if (!video) return;
+                e.preventDefault();
+                captureYouTubeVideoFrame();
+            };
+            window.addEventListener('keydown', screenshotHotkeyHandler, true);
+        }
+        if (!screenshotNavBound) {
+            screenshotNavBound = true;
+            window.addEventListener('yt-navigate-finish', scheduleScreenshotButtonMount);
+            window.addEventListener('loadedmetadata', scheduleScreenshotButtonMount, true);
+        }
+        scheduleScreenshotButtonMount();
+    }
+
+    function removeVideoScreenshotFeature() {
+        clearTimeout(screenshotBtnTimer);
+        removeManagedStyle('yt-screenshot-btn');
+        if (screenshotHotkeyHandler) {
+            window.removeEventListener('keydown', screenshotHotkeyHandler, true);
+            screenshotHotkeyHandler = null;
+        }
+        if (screenshotNavBound) {
+            screenshotNavBound = false;
+            window.removeEventListener('yt-navigate-finish', scheduleScreenshotButtonMount);
+            window.removeEventListener('loadedmetadata', scheduleScreenshotButtonMount, true);
+        }
+        document.querySelectorAll('.bt-ytp-screenshot-btn').forEach(el => el.remove());
+    }
+
+    function tryEnableYouTubeTheater() {
+        if (!autoTheaterActive || !isYouTube || !ytSettings.autoTheater) return;
+        if (!/^\/watch\b/.test(location.pathname || '')) return;
+        const vidKey = new URLSearchParams(location.search).get('v') || location.href;
+        if (lastAutoTheaterVideoKey === vidKey) return;
+
+        const flexy = document.querySelector('ytd-watch-flexy');
+        if (!flexy) return;
+        if (flexy.hasAttribute('theater') || flexy.hasAttribute('fullscreen') || document.fullscreenElement) {
+            lastAutoTheaterVideoKey = vidKey;
+            return;
+        }
+        const sizeBtn = document.querySelector('#movie_player .ytp-size-button');
+        if (sizeBtn) {
+            lastAutoTheaterVideoKey = vidKey;
+            sizeBtn.click();
+        }
+    }
+
+    function scheduleAutoTheater() {
+        if (!autoTheaterActive) return;
+        autoTheaterTimers.forEach(t => clearTimeout(t));
+        autoTheaterTimers = [
+            setTimeout(tryEnableYouTubeTheater, 180),
+            setTimeout(tryEnableYouTubeTheater, 900)
+        ];
+    }
+
+    function onAutoTheaterNavigate() {
+        lastAutoTheaterVideoKey = '';
+        scheduleAutoTheater();
+    }
+
+    function applyAutoTheater() {
+        if (autoTheaterActive) return;
+        autoTheaterActive = true;
+        lastAutoTheaterVideoKey = '';
+        window.addEventListener('yt-navigate-finish', onAutoTheaterNavigate);
+        scheduleAutoTheater();
+    }
+
+    function removeAutoTheater() {
+        autoTheaterActive = false;
+        autoTheaterTimers.forEach(t => clearTimeout(t));
+        autoTheaterTimers = [];
+        window.removeEventListener('yt-navigate-finish', onAutoTheaterNavigate);
+    }
+
+    function applyFocusMode() {
+        setManagedStyle('yt-focus', `
+            ytd-watch-flexy #secondary,
+            ytd-watch-flexy #related,
+            .html5-endscreen.ytp-player-content,
+            .ytp-ce-element {
+                display: none !important;
+            }
+            ytd-watch-flexy[flexy]:not([theater]):not([fullscreen]) #primary.ytd-watch-flexy {
+                max-width: min(1160px, calc(100vw - 48px)) !important;
+                margin-inline: auto !important;
+            }
+        `);
+    }
+
+    // --- 4.2c. Тихая очистка трекинговых параметров URL ---
+
+    const TRACKING_PARAM_NAMES = new Set([
+        'utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content',
+        'utm_id', 'utm_name', 'utm_reader', 'utm_viz_id', 'utm_pubreferrer', 'utm_swu',
+        'fbclid', 'gclid', 'dclid', 'gbraid', 'wbraid', 'msclkid',
+        'yclid', 'ymclid', 'ysclid', 'igshid', 'igs',
+        'mc_cid', 'mc_eid', '_hsenc', '_hsmi', 'mkt_tok', 'vero_id',
+        'oly_enc_id', 'oly_anon_id', 'rb_clickid', '_openstat', 'wickedid',
+        'twclid', 'ttclid', 'li_fat_id', 's_kwcid'
+    ]);
+
+    let cleanUrlActive = false;
+    let cleanUrlCopyHandler = null;
+
+    function stripTrackingFromUrlString(rawUrl) {
+        if (typeof rawUrl !== 'string' || !rawUrl) return rawUrl;
+        try {
+            const parsed = new URL(rawUrl, location.href);
+            if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return rawUrl;
+            const h = parsed.hostname.toLowerCase();
+            const isYtHost = /(^|\.)youtube\.com$/.test(h) || h === 'youtu.be';
+            let changed = false;
+
+            Array.from(parsed.searchParams.keys()).forEach(key => {
+                const lower = key.toLowerCase();
+                if (TRACKING_PARAM_NAMES.has(lower)) {
+                    parsed.searchParams.delete(key);
+                    changed = true;
+                } else if (isYtHost && (lower === 'si' || lower === 'embeds_referring_euri' || (lower === 'feature' && parsed.searchParams.get(key) === 'shared'))) {
+                    parsed.searchParams.delete(key);
+                    changed = true;
+                }
+            });
+
+            return changed ? parsed.toString() : rawUrl;
+        } catch (_) {
+            return rawUrl;
+        }
+    }
+
+    function cleanCurrentLocationUrl() {
+        if (!globalSettings.cleanTrackingUrl) return false;
+        try {
+            const current = location.href;
+            const cleaned = stripTrackingFromUrlString(current);
+            if (cleaned && cleaned !== current) {
+                const parsed = new URL(cleaned);
+                const nextRel = parsed.pathname + parsed.search + parsed.hash;
+                history.replaceState(history.state, '', nextRel);
+                return true;
+            }
+        } catch (_) {}
+        return false;
+    }
+
+    function applyCleanTrackingUrl() {
+        cleanCurrentLocationUrl();
+        if (cleanUrlActive) return;
+        cleanUrlActive = true;
+        window.addEventListener('popstate', cleanCurrentLocationUrl);
+        window.addEventListener('hashchange', cleanCurrentLocationUrl);
+        window.addEventListener('yt-navigate-finish', cleanCurrentLocationUrl);
+        cleanUrlCopyHandler = function (e) {
+            if (!e.clipboardData) return;
+            const sel = String(window.getSelection ? window.getSelection() : '').trim();
+            if (!/^https?:\/\/\S+$/i.test(sel)) return;
+            const cleaned = stripTrackingFromUrlString(sel);
+            if (cleaned !== sel) {
+                e.preventDefault();
+                e.clipboardData.setData('text/plain', cleaned);
+            }
+        };
+        document.addEventListener('copy', cleanUrlCopyHandler, true);
+    }
+
+    function removeCleanTrackingUrl() {
+        if (!cleanUrlActive) return;
+        cleanUrlActive = false;
+        window.removeEventListener('popstate', cleanCurrentLocationUrl);
+        window.removeEventListener('hashchange', cleanCurrentLocationUrl);
+        window.removeEventListener('yt-navigate-finish', cleanCurrentLocationUrl);
+        if (cleanUrlCopyHandler) {
+            document.removeEventListener('copy', cleanUrlCopyHandler, true);
+            cleanUrlCopyHandler = null;
+        }
+    }
+
+    function syncVideoControlListeners() {
+        const wantWheel = (isYouTube && ytSettings.wheelSpeed) || globalSettings.globalVideoSpeed;
+        const wantHotkeys = (isYouTube && ytSettings.speedHotkeys) || globalSettings.globalVideoSpeed;
+        if (wantWheel) applyWheelSpeed(); else removeWheelSpeed();
+        if (wantHotkeys) applySpeedHotkeys(); else removeSpeedHotkeys();
+        if (globalSettings.globalPiPHotkey) applyPiPHotkey(); else removePiPHotkey();
+    }
+
+    function syncGlobalFeatures() {
+        syncVideoControlListeners();
+        if (globalSettings.cleanTrackingUrl) applyCleanTrackingUrl(); else removeCleanTrackingUrl();
     }
 
     // --- 4.3. Перевод комментариев (debounce + учёт переиспользования узлов YouTube) ---
@@ -1590,9 +2273,12 @@
         if (ytSettings.smoothAnim) applySmoothAnimations(); else removeManagedStyle('yt-smooth');
         applyHideElementsCSS();
         if (ytSettings.compactMode) applyCompactMode(); else removeManagedStyle('yt-compact');
+        if (ytSettings.focusMode) applyFocusMode(); else removeManagedStyle('yt-focus');
         if (ytSettings.autoQuality) applyAutoQuality(); else removeAutoQuality();
-        if (ytSettings.wheelSpeed) applyWheelSpeed(); else removeWheelSpeed();
-        if (ytSettings.speedHotkeys) applySpeedHotkeys(); else removeSpeedHotkeys();
+        if (ytSettings.autoTheater) applyAutoTheater(); else removeAutoTheater();
+        if (ytSettings.videoScreenshot) applyVideoScreenshotFeature(); else removeVideoScreenshotFeature();
+        if (ytSettings.rememberChannelSpeed) applyChannelSpeedMemory(); else removeChannelSpeedMemory();
+        syncVideoControlListeners();
         if (ytSettings.translateComments) applyTranslateComments(); else removeTranslateComments();
     }
 
@@ -1610,11 +2296,15 @@
             exportedYtSettings[key] = Boolean(val);
         });
 
+        const exportedGlobalSettings = {};
+        Object.keys(DEFAULT_GLOBAL_SETTINGS).forEach(key => {
+            exportedGlobalSettings[key] = Boolean(globalSettings[key]);
+        });
+
         const rawQuality = isYouTube ? selectedQuality : gmGet(YT_QUALITY_KEY, 'hd1080');
         const exportedQuality = QUALITY_MAP[rawQuality] ? rawQuality : 'hd1080';
 
-        const rawStep = isYouTube ? speedStep : Number(gmGet(YT_SPEED_STEP_KEY, 0.25));
-        const exportedSpeedStep = [0.05, 0.1, 0.25, 0.5].includes(rawStep) ? rawStep : 0.25;
+        const exportedSpeedStep = [0.05, 0.1, 0.25, 0.5].includes(speedStep) ? speedStep : 0.25;
 
         const savedPos = gmGet(PANEL_POS_KEY, null);
         const exportedPos = savedPos && Number.isFinite(Number(savedPos.left)) && Number.isFinite(Number(savedPos.top))
@@ -1623,21 +2313,27 @@
 
         return {
             app: 'Browser Tweaks',
-            schemaVersion: 1,
+            schemaVersion: 2,
             scriptVersion: SCRIPT_VERSION,
             exportedAt: new Date().toISOString(),
             font: {
                 enabled: fontEnabled,
                 intensity: fontIntensity,
-                excludedHosts: getExcludedHosts()
+                excludedHosts: getExcludedHosts(),
+                siteIntensity: getSiteIntensityMap()
+            },
+            global: {
+                settings: exportedGlobalSettings
             },
             youtube: {
                 settings: exportedYtSettings,
                 quality: exportedQuality,
-                speedStep: exportedSpeedStep
+                speedStep: exportedSpeedStep,
+                channelSpeeds: getChannelSpeedsMap()
             },
             ui: {
-                panelPosition: exportedPos
+                panelPosition: exportedPos,
+                panelHotkey
             }
         };
     }
@@ -1710,6 +2406,33 @@
                 gmSet(FONT_EXCLUDED_KEY, cleanedHosts);
                 recognizedCount++;
             }
+            if (data.font.siteIntensity && typeof data.font.siteIntensity === 'object' && !Array.isArray(data.font.siteIntensity)) {
+                const cleanedSiteMap = {};
+                Object.entries(data.font.siteIntensity).forEach(([k, v]) => {
+                    const norm = normalizeHostInput(k);
+                    if (norm && (v === 'soft' || v === 'strong')) cleanedSiteMap[norm] = v;
+                });
+                gmSet(FONT_SITE_INTENSITY_KEY, cleanedSiteMap);
+                recognizedCount++;
+            }
+        }
+
+        if (data.global && typeof data.global === 'object' && !Array.isArray(data.global)) {
+            if (data.global.settings && typeof data.global.settings === 'object' && !Array.isArray(data.global.settings)) {
+                const nextGlobal = Object.assign({}, DEFAULT_GLOBAL_SETTINGS, globalSettings);
+                let globalMatched = false;
+                Object.keys(DEFAULT_GLOBAL_SETTINGS).forEach(key => {
+                    if (typeof data.global.settings[key] === 'boolean') {
+                        nextGlobal[key] = data.global.settings[key];
+                        globalMatched = true;
+                    }
+                });
+                if (globalMatched) {
+                    globalSettings = nextGlobal;
+                    gmSet(GLOBAL_SETTINGS_KEY, nextGlobal);
+                    recognizedCount++;
+                }
+            }
         }
 
         if (data.youtube && typeof data.youtube === 'object' && !Array.isArray(data.youtube)) {
@@ -1746,6 +2469,18 @@
                     recognizedCount++;
                 }
             }
+            if (data.youtube.channelSpeeds && typeof data.youtube.channelSpeeds === 'object' && !Array.isArray(data.youtube.channelSpeeds)) {
+                const cleanMap = {};
+                Object.entries(data.youtube.channelSpeeds).slice(-200).forEach(([k, v]) => {
+                    const num = Number(v);
+                    if (typeof k === 'string' && k && Number.isFinite(num) && num >= 0.25 && num <= 4) {
+                        cleanMap[k] = Math.round(num * 100) / 100;
+                    }
+                });
+                gmSet(YT_CHANNEL_SPEEDS_KEY, cleanMap);
+                lastAppliedChannelSpeedToken = '';
+                recognizedCount++;
+            }
         }
 
         if (data.ui && typeof data.ui === 'object' && !Array.isArray(data.ui)) {
@@ -1763,6 +2498,11 @@
                     recognizedCount++;
                 }
             }
+            if (typeof data.ui.panelHotkey === 'string' && PANEL_HOTKEYS[data.ui.panelHotkey]) {
+                panelHotkey = data.ui.panelHotkey;
+                gmSet(PANEL_HOTKEY_KEY, panelHotkey);
+                recognizedCount++;
+            }
         }
 
         if (recognizedCount === 0) {
@@ -1771,11 +2511,14 @@
 
         applyGlobalFont();
         syncFontUI();
+        syncGlobalFeatures();
+        syncGlobalToolsUI();
         if (isYouTube) {
             syncYouTubeFeatures();
             syncYouTubeUI();
             if (ytSettings.translateComments) applyTranslateUIStyle();
             if (ytSettings.autoQuality) setPreferredQuality();
+            if (ytSettings.rememberChannelSpeed) scheduleChannelSpeedRestore();
         }
     }
 
@@ -1836,6 +2579,15 @@
     // 5. ЛЕНИВЫЙ РЕНДЕР ПАНЕЛИ НАСТРОЕК (SHADOW DOM)
     // ==========================================
 
+    function syncGlobalToolsUI() {
+        if (!uiRefs) return;
+        if (uiRefs.globalCheckboxes) {
+            uiRefs.globalCheckboxes.forEach((cb, key) => { cb.checked = Boolean(globalSettings[key]); });
+        }
+        if (uiRefs.globalSpeedSelect) uiRefs.globalSpeedSelect.value = String(speedStep);
+        if (uiRefs.panelHotkeySelect) uiRefs.panelHotkeySelect.value = panelHotkey;
+    }
+
     function syncYouTubeUI() {
         if (!uiRefs || !isYouTube) return;
         if (uiRefs.checkboxes) {
@@ -1869,7 +2621,7 @@
         const root = ensureShadowHost();
         if (!root) return null;
 
-        uiRefs = { checkboxes: new Map() };
+        uiRefs = { checkboxes: new Map(), globalCheckboxes: new Map() };
 
         panelEl = document.createElement('div');
         panelEl.className = 'bt-panel';
@@ -1953,10 +2705,14 @@
             });
 
             body.appendChild(createCheckRow('wheelSpeed', 'Скорость колесом мыши (Shift)', TOOLTIPS.wheelSpeed));
+            body.appendChild(createCheckRow('speedHotkeys', 'Горячие клавиши скорости', TOOLTIPS.speedHotkeys));
+            body.appendChild(createCheckRow('rememberChannelSpeed', 'Память скорости по каналам', TOOLTIPS.rememberChannelSpeed));
+            body.appendChild(createCheckRow('autoQuality', 'Авто-качество видео', TOOLTIPS.autoQuality));
+            body.appendChild(createCheckRow('autoTheater', 'Авто-широкий плеер (Theater)', TOOLTIPS.autoTheater));
+            body.appendChild(createCheckRow('focusMode', 'Режим фокуса (без рекомендаций)', TOOLTIPS.focusMode));
+            body.appendChild(createCheckRow('videoScreenshot', 'Скриншот кадра видео (Alt+Shift+S)', TOOLTIPS.videoScreenshot));
             body.appendChild(createCheckRow('translateComments', 'Перевод комментариев', TOOLTIPS.translateComments));
             body.appendChild(createCheckRow('compactMode', 'Компактный режим', TOOLTIPS.compactMode));
-            body.appendChild(createCheckRow('autoQuality', 'Авто-качество видео', TOOLTIPS.autoQuality));
-            body.appendChild(createCheckRow('speedHotkeys', 'Горячие клавиши скорости', TOOLTIPS.speedHotkeys));
 
             // Выбор качества
             const qualityRow = document.createElement('div');
@@ -2061,10 +2817,37 @@
             fontIntensity = intensitySelect.value;
             gmSet(FONT_INTENSITY_KEY, fontIntensity);
             applyGlobalFont();
+            syncFontUI();
         });
         uiRefs.intensitySelect = intensitySelect;
         intensityRow.append(intensityLabel, intensitySelect);
         fontControlsWrap.appendChild(intensityRow);
+
+        const siteModeRow = document.createElement('div');
+        siteModeRow.className = 'bt-select-row';
+        siteModeRow.style.padding = '0';
+        const siteModeLabel = document.createElement('span');
+        siteModeLabel.className = 'bt-select-label';
+        siteModeLabel.textContent = 'На этом сайте:';
+        const siteModeSelect = document.createElement('select');
+        siteModeSelect.className = 'bt-select';
+        [
+            ['default', 'Как глобально'],
+            ['soft', 'Мягкая (только здесь)'],
+            ['strong', 'Выраженная (только здесь)'],
+            ['excluded', 'Исключён (системный)']
+        ].forEach(([val, text]) => {
+            const opt = document.createElement('option');
+            opt.value = val;
+            opt.textContent = text;
+            siteModeSelect.appendChild(opt);
+        });
+        siteModeSelect.addEventListener('change', () => {
+            setCurrentSiteFontMode(siteModeSelect.value, true);
+        });
+        uiRefs.siteModeSelect = siteModeSelect;
+        siteModeRow.append(siteModeLabel, siteModeSelect);
+        fontControlsWrap.appendChild(siteModeRow);
 
         const excludeBtn = document.createElement('button');
         excludeBtn.type = 'button';
@@ -2117,7 +2900,8 @@
                 submitExclInput();
                 return;
             }
-            if (e.key === 'Escape' || e.key === 'F2') return;
+            const matcher = (PANEL_HOTKEYS[panelHotkey] || PANEL_HOTKEYS.F2).match;
+            if (e.key === 'Escape' || matcher(e)) return;
             e.stopPropagation();
         });
         exclInput.addEventListener('keypress', e => e.stopPropagation());
@@ -2152,6 +2936,100 @@
         uiRefs.fontNote = fontNote;
         fontCard.appendChild(fontNote);
         body.appendChild(fontCard);
+
+        // Карточка универсальных браузерных инструментов (для всех сайтов)
+        const globalCard = document.createElement('div');
+        globalCard.className = 'bt-card';
+
+        const globalTitle = document.createElement('div');
+        globalTitle.className = 'bt-card-title';
+        globalTitle.textContent = 'Универсальные функции браузера';
+        globalCard.appendChild(globalTitle);
+
+        const createGlobalCheckRow = (key, labelText, tooltipText) => {
+            const label = document.createElement('label');
+            label.className = 'bt-row-check';
+            label.style.padding = '4px 6px';
+            const cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.checked = Boolean(globalSettings[key]);
+            const text = document.createElement('span');
+            text.textContent = labelText;
+            label.append(cb, text);
+
+            cb.addEventListener('change', () => {
+                globalSettings[key] = cb.checked;
+                gmSet(GLOBAL_SETTINGS_KEY, globalSettings);
+                syncGlobalFeatures();
+                syncGlobalToolsUI();
+            });
+
+            attachTooltipBehavior(label, tooltipText);
+            uiRefs.globalCheckboxes.set(key, cb);
+            return label;
+        };
+
+        globalCard.appendChild(createGlobalCheckRow('globalVideoSpeed', 'Скорость HTML5-видео на всех сайтах', GLOBAL_TOOLTIPS.globalVideoSpeed));
+        globalCard.appendChild(createGlobalCheckRow('globalPiPHotkey', 'Картинка в картинке (Alt + P)', GLOBAL_TOOLTIPS.globalPiPHotkey));
+        globalCard.appendChild(createGlobalCheckRow('cleanTrackingUrl', 'Очистка трекинга в URL (utm, fbclid…)', GLOBAL_TOOLTIPS.cleanTrackingUrl));
+
+        if (!isYouTube) {
+            const globalSpeedRow = document.createElement('div');
+            globalSpeedRow.className = 'bt-select-row';
+            globalSpeedRow.style.padding = '0';
+            const globalSpeedLabel = document.createElement('span');
+            globalSpeedLabel.className = 'bt-select-label';
+            globalSpeedLabel.textContent = 'Шаг скорости:';
+            const globalSpeedSelect = document.createElement('select');
+            globalSpeedSelect.className = 'bt-select';
+            [
+                [0.05, '0,05×'],
+                [0.1, '0,1×'],
+                [0.25, '0,25×'],
+                [0.5, '0,5×']
+            ].forEach(([val, text]) => {
+                const opt = document.createElement('option');
+                opt.value = String(val);
+                opt.textContent = text;
+                opt.selected = val === speedStep;
+                globalSpeedSelect.appendChild(opt);
+            });
+            globalSpeedSelect.addEventListener('change', () => {
+                speedStep = Number(globalSpeedSelect.value);
+                gmSet(YT_SPEED_STEP_KEY, speedStep);
+            });
+            uiRefs.globalSpeedSelect = globalSpeedSelect;
+            globalSpeedRow.append(globalSpeedLabel, globalSpeedSelect);
+            globalCard.appendChild(globalSpeedRow);
+        }
+
+        const hotkeyRow = document.createElement('div');
+        hotkeyRow.className = 'bt-select-row';
+        hotkeyRow.style.padding = '0';
+        const hotkeyLabel = document.createElement('span');
+        hotkeyLabel.className = 'bt-select-label';
+        hotkeyLabel.textContent = 'Клавиша панели:';
+        const panelHotkeySelect = document.createElement('select');
+        panelHotkeySelect.className = 'bt-select';
+        Object.entries(PANEL_HOTKEYS).forEach(([key, def]) => {
+            const opt = document.createElement('option');
+            opt.value = key;
+            opt.textContent = def.label;
+            opt.selected = key === panelHotkey;
+            panelHotkeySelect.appendChild(opt);
+        });
+        panelHotkeySelect.addEventListener('change', () => {
+            if (PANEL_HOTKEYS[panelHotkeySelect.value]) {
+                panelHotkey = panelHotkeySelect.value;
+                gmSet(PANEL_HOTKEY_KEY, panelHotkey);
+                showOSD('Клавиша панели: ' + getPanelHotkeyLabel(), 'on');
+            }
+        });
+        uiRefs.panelHotkeySelect = panelHotkeySelect;
+        hotkeyRow.append(hotkeyLabel, panelHotkeySelect);
+        globalCard.appendChild(hotkeyRow);
+
+        body.appendChild(globalCard);
 
         // Карточка резервного копирования настроек (JSON)
         const backupCard = document.createElement('div');
@@ -2190,7 +3068,7 @@
 
         const backupNote = document.createElement('div');
         backupNote.className = 'bt-note';
-        backupNote.textContent = 'Сохраняет и восстанавливает все параметры шрифта, исключения сайтов и настройки YouTube.';
+        backupNote.textContent = 'Сохраняет и восстанавливает все параметры шрифта, исключения, универсальные твики и настройки YouTube.';
         backupCard.appendChild(backupNote);
         body.appendChild(backupCard);
 
@@ -2230,6 +3108,7 @@
         root.appendChild(panelEl);
 
         syncFontUI();
+        syncGlobalToolsUI();
         syncYouTubeUI();
         makeDraggable(panelEl, header);
         return panelEl;
@@ -2241,6 +3120,7 @@
         const willOpen = !panel.classList.contains('open');
         if (willOpen) {
             syncFontUI();
+            syncGlobalToolsUI();
             syncYouTubeUI();
             panel.classList.add('open');
             clampPanelPosition();
@@ -2250,6 +3130,9 @@
     }
 
     function closePanel() {
+        if (shadow && shadow.activeElement && typeof shadow.activeElement.blur === 'function') {
+            shadow.activeElement.blur();
+        }
         if (panelEl) panelEl.classList.remove('open');
         hideTooltip();
     }
@@ -2269,7 +3152,8 @@
             toggleFontExclusion(true);
             return;
         }
-        if (e.key === 'F2' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+        const hotkeyMatcher = (PANEL_HOTKEYS[panelHotkey] || PANEL_HOTKEYS.F2).match;
+        if (!e.repeat && hotkeyMatcher(e)) {
             e.preventDefault();
             togglePanel();
             return;
@@ -2287,7 +3171,7 @@
 
     if (typeof GM_registerMenuCommand === 'function') {
         try {
-            GM_registerMenuCommand('Открыть / закрыть панель настроек (F2)', () => togglePanel());
+            GM_registerMenuCommand('Открыть / закрыть панель настроек', () => togglePanel());
             GM_registerMenuCommand('Вкл / выкл кастомный шрифт полностью (Alt+Shift+F)', () => toggleGlobalFontEnabled(true));
             GM_registerMenuCommand('Исключить / вернуть текущий сайт (Alt+Shift+U)', () => toggleFontExclusion(true));
             GM_registerMenuCommand('Экспорт настроек в JSON', () => exportSettingsToJsonFile(true));
@@ -2309,15 +3193,38 @@
                 applyGlobalFont();
                 syncFontUI();
             });
+            GM_addValueChangeListener(FONT_SITE_INTENSITY_KEY, (_k, _oldV, _newV, remote) => {
+                if (!remote) return;
+                applyGlobalFont();
+                syncFontUI();
+            });
             GM_addValueChangeListener(FONT_INTENSITY_KEY, (_k, _oldV, newV, remote) => {
                 if (!remote) return;
                 if (newV === 'soft' || newV === 'strong') fontIntensity = newV;
                 applyGlobalFont();
                 syncFontUI();
             });
+            GM_addValueChangeListener(GLOBAL_SETTINGS_KEY, (_k, _oldV, newV, remote) => {
+                if (!remote || !newV || typeof newV !== 'object') return;
+                globalSettings = Object.assign({}, DEFAULT_GLOBAL_SETTINGS, newV);
+                syncGlobalFeatures();
+                syncGlobalToolsUI();
+            });
+            GM_addValueChangeListener(PANEL_HOTKEY_KEY, (_k, _oldV, newV, remote) => {
+                if (!remote || typeof newV !== 'string' || !PANEL_HOTKEYS[newV]) return;
+                panelHotkey = newV;
+                syncGlobalToolsUI();
+            });
             GM_addValueChangeListener(PANEL_POS_KEY, (_k, _oldV, newV, remote) => {
                 if (!remote) return;
                 applyPanelSavedPosition(newV);
+            });
+            GM_addValueChangeListener(YT_SPEED_STEP_KEY, (_k, _oldV, newV, remote) => {
+                const num = Number(newV);
+                if (!remote || ![0.05, 0.1, 0.25, 0.5].includes(num)) return;
+                speedStep = num;
+                syncGlobalToolsUI();
+                syncYouTubeUI();
             });
             if (isYouTube) {
                 GM_addValueChangeListener(YT_SETTINGS_KEY, (_k, _oldV, newV, remote) => {
@@ -2332,15 +3239,16 @@
                     syncYouTubeUI();
                     if (ytSettings.autoQuality) setPreferredQuality();
                 });
-                GM_addValueChangeListener(YT_SPEED_STEP_KEY, (_k, _oldV, newV, remote) => {
-                    const num = Number(newV);
-                    if (!remote || ![0.05, 0.1, 0.25, 0.5].includes(num)) return;
-                    speedStep = num;
-                    syncYouTubeUI();
+                GM_addValueChangeListener(YT_CHANNEL_SPEEDS_KEY, (_k, _oldV, _newV, remote) => {
+                    if (!remote) return;
+                    lastAppliedChannelSpeedToken = '';
+                    if (ytSettings.rememberChannelSpeed) scheduleChannelSpeedRestore();
                 });
             }
         } catch (_) {}
     }
+
+    syncGlobalFeatures();
 
     if (isYouTube) {
         const initYouTube = () => syncYouTubeFeatures();

@@ -6,11 +6,35 @@
 
 ## Установка
 
+### Быстрая установка скриптом (рекомендуется)
+
+Автоустановщик сам находит активный профиль Firefox в `profiles.ini`, сохраняет резервную копию существующей папки `chrome` и подключает базовый [`user.js`](user.js) (автоматически активирующий поддержку CSS-таблиц и SVG-иконок).
+
+**Windows (PowerShell):**
+
+```powershell
+# Копирование файлов и установка user.js:
+.\firefox-customization\install.ps1 -WithUserJs
+
+# Либо подключение через Junction (без прав администратора), чтобы git pull сразу обновлял тему:
+.\firefox-customization\install.ps1 -Mode Link -WithUserJs
+```
+
+**Linux / macOS (Bash):**
+
+```bash
+./firefox-customization/install.sh --link --with-user-js
+```
+
+Сгенерировать индивидуальный `user.js` с нужным набором опций также можно в [интерактивном конфигураторе на сайте проекта](https://solasfor.github.io/Browser/#configurator).
+
+### Ручная установка
+
 1. В Firefox откройте `about:config`.
-2. Найдите `toolkit.legacyUserProfileCustomizations.stylesheets` и установите значение `true` (тип Boolean).
+2. Найдите `toolkit.legacyUserProfileCustomizations.stylesheets` и установите значение `true` (тип Boolean), а также включите `svg.context-properties.content.enabled` = `true`.
 3. Откройте `about:support`, найдите «Папка профиля» и нажмите «Открыть папку».
 4. Закройте Firefox. В папке профиля создайте каталог `chrome`, если его ещё нет.
-5. Скопируйте содержимое каталога [`chrome/`](chrome/) этого репозитория в папку `chrome` профиля Firefox. Путь к файлу должен быть `<профиль>/chrome/userChrome.css`.
+5. Скопируйте содержимое каталога [`chrome/`](chrome/) этого репозитория в папку `chrome` профиля Firefox (при желании скопируйте [`user.js`](user.js) в корень профиля). Путь к файлу должен быть `<профиль>/chrome/userChrome.css`.
 6. Запустите Firefox. Если изменения не появились, проверьте настройку из шага 2 и перезапустите браузер.
 
 Перед заменой существующих файлов сохраните резервную копию. Не объединяйте вслепую несколько разных тем: одинаковые CSS-селекторы могут конфликтовать.
@@ -36,20 +60,20 @@
 
 ## Дополнительные CSS-моды
 
-В таблице перечислены отдельные CSS-модификации. В столбце «Скриншот» показан предварительный просмотр, если он есть в репозитории. Нажмите на изображение, чтобы открыть его в полном размере. Подключайте модификации по одной и проверяйте результат.
+Все перечисленные ниже модульные CSS-файлы подключены по умолчанию и управляются на лету через Boolean-флаги в `about:config` (или через [`user.js`](user.js)) без необходимости редактировать или удалять файлы темы. Чтобы **отключить** любой модуль отдельно, создайте соответствующий параметр в `about:config` со значением `true`.
 
-| Файл или модификация | Что делает | Скриншот |
+| Файл или модификация | Параметр отключения (`true` = выкл.) | Что делает |
 | --- | --- | --- |
-| [`cleaner_extensions_menu.css`](chrome/cleaner_extensions_menu.css) | Делает меню расширений компактнее: позволяет настраивать размер значков и число значков в строке, уменьшает отступы и скрывает некоторые элементы меню. | — |
-| [`colored_soundplaying_tab.css`](chrome/colored_soundplaying_tab.css) | Подсвечивает фоном неактивную вкладку, в которой воспроизводится звук. Цвет задаётся переменной `--firefoxcss-colored-sound-tab`. | — |
-| [`icons_in_main_menu.css`](chrome/icons_in_main_menu.css) | Добавляет значки к пунктам главного меню Firefox. | — |
-| [`menu_icon_change_to_firefox.css`](chrome/menu_icon_change_to_firefox.css) | Заменяет значок главного меню логотипом Firefox; предусмотрены варианты для светлой, тёмной и приватной темы. | — |
-| [`right-min-max-close_buttons.css`](chrome/right-min-max-close_buttons.css) | Оформляет кнопки сворачивания, разворачивания и закрытия окна в стиле macOS и размещает их справа на панели вкладок. | — |
-| [`only_show_list-all-tabs_when_tabs_overflowing.css`](chrome/only_show_list-all-tabs_when_tabs_overflowing.css) | Показывает кнопку списка всех вкладок только тогда, когда вкладки не помещаются в панели. | — |
-| [`remove_folder_icons_from_bookmarks.css`](chrome/remove_folder_icons_from_bookmarks.css) | Скрывает значки папок на панели закладок, оставляя названия. | — |
-| [`thin_scrollbar_windows10.css`](chrome/thin_scrollbar_windows10.css) | Делает полосы прокрутки тоньше. В комментарии к файлу указано, что он ориентирован на Windows 10; на других системах результат может отличаться. | — |
-| [`ublock-icon-change.css`](chrome/ublock-icon-change.css) | Стили для изменения значка uBlock Origin. | — |
-| [`white_github_icon_in_bookmarks.css`](chrome/white_github_icon_in_bookmarks.css) | Заменяет значок GitHub на панели закладок белой версией для лучшей видимости на тёмном фоне. | — |
+| [`cleaner_extensions_menu.css`](chrome/cleaner_extensions_menu.css) | `mod.disable.cleaner.extensions.menu` | Делает меню расширений компактнее: позволяет настраивать размер значков и число значков в строке, уменьшает отступы и скрывает лишние подписи. |
+| [`colored_soundplaying_tab.css`](chrome/colored_soundplaying_tab.css) | `mod.disable.colored.sound.tab` | Подсвечивает фоном неактивную вкладку, в которой воспроизводится звук. Цвет задаётся переменной `--firefoxcss-colored-sound-tab`. |
+| [`icons_in_main_menu.css`](chrome/icons_in_main_menu.css) | `mod.disable.main.menu.icons` | Добавляет значки к пунктам главного меню Firefox. |
+| [`menu_icon_change_to_firefox.css`](chrome/menu_icon_change_to_firefox.css) | `mod.disable.firefox.menu.icon` | Заменяет значок главного меню логотипом Firefox; предусмотрены варианты для светлой, тёмной и приватной темы. |
+| [`right-min-max-close_buttons.css`](chrome/right-min-max-close_buttons.css) | `mod.disable.macos.window.buttons` | Оформляет кнопки сворачивания, разворачивания и закрытия окна в стиле macOS и размещает их справа на панели вкладок. |
+| [`only_show_list-all-tabs_when_tabs_overflowing.css`](chrome/only_show_list-all-tabs_when_tabs_overflowing.css) | `mod.disable.overflow.only.alltabs` | Показывает кнопку списка всех вкладок только тогда, когда вкладки не помещаются в панели. |
+| [`remove_folder_icons_from_bookmarks.css`](chrome/remove_folder_icons_from_bookmarks.css) | `mod.disable.remove.bookmark.folder.icons` | Скрывает значки папок на панели закладок, оставляя названия. |
+| [`thin_scrollbar_windows10.css`](chrome/thin_scrollbar_windows10.css) | `mod.disable.thin.scrollbar` | Делает полосы прокрутки веб-страниц тоньше. |
+| [`ublock-icon-change.css`](chrome/ublock-icon-change.css) | `mod.disable.ublock.icon.change` | Стили для изменения значка uBlock Origin. |
+| [`white_github_icon_in_bookmarks.css`](chrome/white_github_icon_in_bookmarks.css) | `mod.disable.white.github.bookmark.icon` | Заменяет значок GitHub на панели закладок белой версией для лучшей видимости на тёмном фоне. |
 
 ### Дополнительные ресурсы
 
@@ -57,4 +81,4 @@
 - [`chrome/ASSETS/other/`](chrome/ASSETS/other/) — вспомогательные графические ресурсы, например текстура шума.
 - [`chrome/ASSETS/wallpaper/`](chrome/ASSETS/wallpaper/) — изображения обоев, которые могут использоваться оформлением.
 
-**Важно:** перечисленные выше модульные CSS-файлы в `chrome/` уже подключены через `@import` в `userChrome.css` и `userContent.css`. Чтобы отключить ненужную модификацию или добавить новую, отредактируйте список `@import` в начале соответствующего файла.
+Справка со списком всех доступных ключей `mod.*` также отображается прямо на стартовом экране `about:config` благодаря стилям в `userContent.css`.

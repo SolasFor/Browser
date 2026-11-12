@@ -1,5 +1,7 @@
 /* ----- Hide "List all tabs" button. 
 Only shows up on tab overflow ----- */
-#tabbrowser-tabs:not([overflow]) ~ #alltabs-button {
-	display: none !important;
+@media not -moz-pref("mod.disable.overflow.only.alltabs") {
+  #tabbrowser-tabs:not([overflow]) ~ #alltabs-button {
+    display: none !important;
+  }
 }

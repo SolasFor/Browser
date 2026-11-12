@@ -1,4 +1,5 @@
 /*  Clean and tight extensions menu */
+@media not -moz-pref("mod.disable.cleaner.extensions.menu") {
 #unified-extensions-panel #unified-extensions-view {
   width: 100% !important; /*  For firefox v115.x */
 }
@@ -144,4 +145,5 @@
   #unified-extensions-view #unified-extensions-area + .unified-extensions-list {
     display: none !important;
   }
+}
 }

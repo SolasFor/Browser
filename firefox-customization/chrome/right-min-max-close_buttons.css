@@ -1,4 +1,5 @@
 /* ----- Move menu buttons to the left side ----- */
+@media not -moz-pref("mod.disable.macos.window.buttons") {
 @media -moz-pref("sidebar.verticalTabs") {
   #nav-bar .titlebar-buttonbox-container {
     display: none !important;
@@ -332,6 +333,7 @@ toolbar:not([customizing]) > #nav-bar-customization-target {
   
   #main-window #navigator-toolbox:not([inFullscreen]) #nav-bar {
     padding-right: initial !important;
+}
 }
 }
 }

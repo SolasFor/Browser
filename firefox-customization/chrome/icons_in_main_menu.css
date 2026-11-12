@@ -2,6 +2,7 @@
 See the above repository for updates as well as full license text. */
 
 /* Adds icons to main menu items which were removed in Proton */
+@media not -moz-pref("mod.disable.main.menu.icons") {
 #appMenu-zoom-controls::before,
 #appMenu-fxa-status2[fxastatus] > toolbarbutton::before,
 :where(#appMenu-mainView) > .panel-subview-body > .subviewbutton > .toolbarbutton-icon{
@@ -52,4 +53,5 @@ See the above repository for updates as well as full license text. */
 }
 #appMenu-translate-button ~ *{
   order: 2;
+}
 }

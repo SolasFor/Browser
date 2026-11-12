@@ -3,29 +3,579 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="CSS-моды для Firefox и единый пользовательский скрипт Browser Tweaks.">
+<meta name="description" content="CSS-моды для Firefox, автоустановщик профиля, единый скрипт Browser Tweaks v1.3.0 и интерактивный генератор пресетов.">
 <title>Browser Customization — SolasFor</title>
 <style>
-:root{color-scheme:dark;background:#0b1020;color:#edf2fb;font-family:system-ui,-apple-system,"Segoe UI",sans-serif}
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 10% 0%,#234a7c55,transparent 34%),#0b1020}
-main{width:min(1000px,calc(100% - 36px));margin:auto;padding:72px 0}
-.eyebrow{color:#8ab4ff;letter-spacing:.15em;text-transform:uppercase;font-size:.8rem;font-weight:700}
-h1{font-size:clamp(2.6rem,8vw,5.5rem);line-height:1;letter-spacing:-.06em;margin:18px 0}
-.intro,p{color:#aab5c8;line-height:1.7}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:16px}
-.card{padding:24px;border:1px solid #ffffff1b;border-radius:18px;background:#141c2de8}
-.button{display:inline-block;padding:11px 15px;border-radius:10px;background:linear-gradient(135deg,#2878e8,#6947d9);color:white;text-decoration:none;font-weight:700;margin:4px 4px 4px 0}
-.secondary{background:#ffffff12}section{margin-top:48px}footer{margin-top:56px;border-top:1px solid #ffffff1b;padding-top:20px;font-size:.9rem}
+:root {
+  color-scheme: dark;
+  --bg: #0b1020;
+  --card: #141c2de8;
+  --card-2: #0f1626;
+  --border: #ffffff1f;
+  --text: #edf2fb;
+  --muted: #aab5c8;
+  --accent: #8ab4ff;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: radial-gradient(circle at 10% 0%, #234a7c55, transparent 34%), var(--bg);
+}
+main {
+  width: min(1040px, calc(100% - 36px));
+  margin: auto;
+  padding: 68px 0;
+}
+.eyebrow {
+  color: var(--accent);
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  font-size: .8rem;
+  font-weight: 700;
+}
+h1 {
+  font-size: clamp(2.5rem, 7.5vw, 5.2rem);
+  line-height: 1;
+  letter-spacing: -.05em;
+  margin: 18px 0;
+}
+h2 { margin: 0 0 16px; font-size: 1.55rem; letter-spacing: -.02em; }
+h3 { margin: 0 0 10px; font-size: 1.15rem; }
+h4 { margin: 0 0 8px; font-size: .95rem; color: #dbe6fb; }
+.intro, p { color: var(--muted); line-height: 1.68; }
+section { margin-top: 48px; }
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr));
+  gap: 16px;
+}
+.card {
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+}
+.button, button.btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 15px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: linear-gradient(135deg, #2878e8, #6947d9);
+  color: #fff;
+  text-decoration: none;
+  font: inherit;
+  font-size: .92rem;
+  font-weight: 600;
+  cursor: pointer;
+  margin: 4px 6px 4px 0;
+}
+.secondary, button.btn-action.secondary {
+  background: #ffffff12;
+  border-color: var(--border);
+  color: var(--text);
+}
+.button:hover, button.btn-action:hover { filter: brightness(1.08); }
+
+/* Интерактивный конфигуратор */
+.cfg-shell {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  overflow: hidden;
+}
+.cfg-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  background: #0e1525cc;
+}
+.cfg-tab {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: .9rem;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.cfg-tab[aria-selected="true"] {
+  background: #2878e82b;
+  border-color: #659eff88;
+  color: #fff;
+}
+.cfg-pane { padding: 20px; display: flex; flex-direction: column; gap: 18px; }
+.cfg-pane[hidden] { display: none; }
+.cfg-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: 16px;
+}
+.cfg-box {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--card-2);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.chk {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: .9rem;
+  color: #d6e0f2;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.chk input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: #5b9dff;
+  flex-shrink: 0;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: .86rem;
+  color: var(--muted);
+}
+.field-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: .88rem;
+  color: #d6e0f2;
+}
+select, input[type="number"], input[type="text"], textarea {
+  background: #172136;
+  color: var(--text);
+  border: 1px solid #ffffff29;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font: inherit;
+  font-size: .86rem;
+  outline: none;
+}
+select:focus, input:focus, textarea:focus { border-color: #77a9ff; }
+textarea.code-preview {
+  width: 100%;
+  min-height: 176px;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: .8rem;
+  line-height: 1.45;
+  resize: vertical;
+  background: #0a0f1c;
+}
+.cfg-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.status-pill {
+  font-size: .85rem;
+  color: #9ad4b1;
+  min-height: 1.2em;
+}
+footer {
+  margin-top: 56px;
+  border-top: 1px solid var(--border);
+  padding-top: 20px;
+  font-size: .9rem;
+}
+a { color: var(--accent); }
 </style>
 </head>
-<body><main>
-<div class="eyebrow">SolasFor / Browser</div>
-<h1>Browser<br>Customization</h1>
-<p class="intro">CSS-модификации Firefox и единый пользовательский скрипт Browser Tweaks: глобальный шрифт Ubuntu Light и дополнительные инструменты для YouTube.</p>
-<section><h2>С чего начать</h2><div class="grid">
-<article class="card"><h3>1. Настроить Firefox</h3><p>Включи поддержку пользовательских стилей, затем скопируй файлы в папку профиля браузера.</p><a class="button" href="firefox-customization/">Инструкция по установке</a></article>
-<article class="card"><h3>2. Установить Violentmonkey</h3><p>Расширение для установки и управления единым пользовательским скриптом.</p><a class="button secondary" href="https://violentmonkey.github.io/">Получить Violentmonkey</a></article>
-</div></section>
-<section><h2>Firefox Customization</h2><div class="grid"><article class="card"><h3>Firefox-Mod-Blur collection</h3><p>CSS-моды, настройки about:config и галерея скриншотов, показывающая визуальный эффект каждой функции.</p><a class="button" href="firefox-customization/">Документация и скриншоты</a><a class="button secondary" href="https://github.com/datguypiko/Firefox-Mod-Blur">Исходный проект</a></article></div></section>
-<section><h2>Browser Tweaks</h2><div class="grid"><article class="card"><h3>Единый userscript</h3><p>Один скрипт вместо двух отдельных. Ubuntu Light применяется на сайтах с настройкой интенсивности, списком исключений и возможностью полного глобального отключения, функции YouTube Tweaks активны только на YouTube, а все настройки можно сохранять и переносить через JSON.</p><p><strong>Ubuntu Light:</strong> глобальный переключатель, два уровня интенсивности, менеджер списка исключённых сайтов и быстрое переключение текущего домена.</p><p><strong>YouTube:</strong> модульное скрытие элементов по категориям, компактный режим, анимации, перевод комментариев, авто-качество и управление скоростью.</p><p><strong>Резервная копия:</strong> экспорт и импорт всех параметров шрифта, исключений и настроек YouTube в JSON.</p><p><strong>Клавиши:</strong> F2 — панель; Alt + Shift + F — вкл/выкл шрифт полностью; Alt + Shift + U — исключить или вернуть текущий сайт; Esc — закрыть панель.</p><a class="button" href="userscripts/browser-tweaks-unified.user.js">Установить Browser Tweaks</a><a class="button secondary" href="https://github.com/SolasFor/Browser#readme">Все функции и инструкция</a></article></div></section>
-<footer>CSS-модификации основаны на <a href="https://github.com/datguypiko/Firefox-Mod-Blur">Firefox-Mod-Blur</a>. <a href="https://github.com/SolasFor/Browser#readme">README проекта</a>.</footer>
-</main></body></html>
+<body>
+<main>
+  <div class="eyebrow">SolasFor / Browser</div>
+  <h1>Browser<br>Customization</h1>
+  <p class="intro">CSS-модификации Firefox с автоустановщиком профиля и единый пользовательский скрипт <strong>Browser Tweaks v1.3.0</strong>: глобальный шрифт Ubuntu Light, универсальные инструменты видео и URL, а также модули для YouTube.</p>
+
+  <section>
+    <h2>С чего начать</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>1. Настроить Firefox</h3>
+        <p>Запусти автоустановщик <code>install.ps1</code> / <code>install.sh</code> (с резервной копией и <code>user.js</code>) или скопируй тему вручную.</p>
+        <a class="button" href="firefox-customization/">Руководство Firefox</a>
+      </article>
+      <article class="card">
+        <h3>2. Установить Browser Tweaks</h3>
+        <p>Поставь расширение Violentmonkey и подключи единый скрипт Browser Tweaks v1.3.0 с автообновлением из репозитория.</p>
+        <a class="button" href="userscripts/browser-tweaks-unified.user.js">Установить скрипт</a>
+        <a class="button secondary" href="https://violentmonkey.github.io/">Violentmonkey</a>
+      </article>
+    </div>
+  </section>
+
+  <section>
+    <h2>Возможности</h2>
+    <div class="grid">
+      <article class="card">
+        <h3>Firefox Customization</h3>
+        <p>Коллекция стилей на базе Firefox-Mod-Blur: <code>userChrome.css</code>, <code>userContent.css</code>, готовый шаблон <code>user.js</code> и 10 модульных CSS-модов, каждый из которых теперь переключается на лету через флаги <code>about:config</code> без редактирования файлов.</p>
+        <a class="button" href="firefox-customization/">Документация и флаги</a>
+        <a class="button secondary" href="https://github.com/datguypiko/Firefox-Mod-Blur">Исходный проект</a>
+      </article>
+      <article class="card">
+        <h3>Browser Tweaks v1.3.0</h3>
+        <p><strong>Шрифт Ubuntu Light:</strong> глобальное вкл/выкл, индивидуальная интенсивность для отдельных сайтов, защита формул KaTeX/MathJax и терминалов xterm, менеджер исключений.</p>
+        <p><strong>Для всех сайтов:</strong> скорость любого HTML5-видео (<code>Shift + колесо</code>, <code>Ctrl + ↑/↓/0</code>), Картинка в картинке (<code>Alt + P</code>), очистка трекеров URL и выбор клавиши открытия панели.</p>
+        <p><strong>Для YouTube:</strong> скрытие мусора по 5 категориям, авто-широкий плеер, режим фокуса без рекомендаций, память скорости по каналам, снимок кадра в 4K (<code>Alt + Shift + S</code>), перевод комментариев и авто-качество.</p>
+        <a class="button" href="userscripts/browser-tweaks-unified.user.js">Установить Browser Tweaks</a>
+        <a class="button secondary" href="https://github.com/SolasFor/Browser#readme">README проекта</a>
+      </article>
+    </div>
+  </section>
+
+  <section id="configurator">
+    <h2>Интерактивный конфигуратор пресетов</h2>
+    <p>Отметь нужные функции и скачай готовый файл: <code>browser-tweaks-settings.json</code> импортируется прямо в панели скрипта («Импорт JSON»), а <code>user.js</code> помещается в папку профиля Firefox.</p>
+
+    <div class="cfg-shell">
+      <div class="cfg-tabs" role="tablist" aria-label="Выбор генератора">
+        <button type="button" class="cfg-tab" role="tab" id="tab-bt" aria-controls="pane-bt" aria-selected="true">Browser Tweaks (JSON v1.3.0)</button>
+        <button type="button" class="cfg-tab" role="tab" id="tab-ff" aria-controls="pane-ff" aria-selected="false">Firefox Customization (user.js)</button>
+      </div>
+
+      <!-- Панель 1: Browser Tweaks JSON -->
+      <div class="cfg-pane" id="pane-bt" role="tabpanel" aria-labelledby="tab-bt">
+        <div class="cfg-columns">
+          <div class="cfg-box">
+            <h4>Ubuntu Light и общие функции</h4>
+            <label class="chk"><input type="checkbox" id="bt-font-enabled" checked><span>Включить кастомный шрифт Ubuntu Light</span></label>
+            <div class="field-inline">
+              <label for="bt-font-intensity">Интенсивность:</label>
+              <select id="bt-font-intensity">
+                <option value="strong" selected>Выраженная</option>
+                <option value="soft">Мягкая</option>
+              </select>
+            </div>
+            <div class="field-inline">
+              <label for="bt-panel-hotkey">Клавиша панели:</label>
+              <select id="bt-panel-hotkey">
+                <option value="F2" selected>F2</option>
+                <option value="AltShiftB">Alt + Shift + B</option>
+                <option value="AltShiftM">Alt + Shift + M</option>
+                <option value="CtrlShiftF2">Ctrl + Shift + F2</option>
+              </select>
+            </div>
+            <label class="chk"><input type="checkbox" id="bt-g-speed"><span>Скорость HTML5-видео на всех сайтах</span></label>
+            <label class="chk"><input type="checkbox" id="bt-g-pip"><span>Картинка в картинке (Alt + P)</span></label>
+            <label class="chk"><input type="checkbox" id="bt-g-cleanurl"><span>Очистка трекинга в URL (utm, fbclid, si…)</span></label>
+            <div class="field">
+              <label for="bt-excl-hosts">Исключённые домены (по одному в строке):</label>
+              <textarea id="bt-excl-hosts" rows="3" placeholder="docs.google.com&#10;figma.com"></textarea>
+            </div>
+          </div>
+
+          <div class="cfg-box">
+            <h4>Инструменты YouTube</h4>
+            <label class="chk"><input type="checkbox" id="bt-yt-smooth"><span>Плавные анимации страницы</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-hide"><span>Скрыть лишние элементы интерфейса</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-wheel"><span>Скорость колесом мыши (Shift)</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-hotkeys"><span>Горячие клавиши скорости (Ctrl + ↑/↓/0)</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-chspeed"><span>Память скорости отдельно по каналам</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-autoq"><span>Авто-выбор качества видео</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-theater"><span>Авто-широкий плеер (Theater Mode)</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-focus"><span>Режим фокуса (скрыть рекомендации)</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-shot"><span>Скриншот кадра видео (Alt + Shift + S)</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-trans"><span>Перевод комментариев на русский</span></label>
+            <label class="chk"><input type="checkbox" id="bt-yt-compact"><span>Компактный режим</span></label>
+            <div class="field-inline">
+              <label for="bt-yt-quality">Качество YouTube:</label>
+              <select id="bt-yt-quality">
+                <option value="hd720">HD (720p)</option>
+                <option value="hd1080" selected>FHD (1080p)</option>
+                <option value="hd1440">2K (1440p)</option>
+                <option value="hd2160">4K (2160p)</option>
+              </select>
+            </div>
+            <div class="field-inline">
+              <label for="bt-yt-step">Шаг скорости:</label>
+              <select id="bt-yt-step">
+                <option value="0.05">0,05×</option>
+                <option value="0.1">0,1×</option>
+                <option value="0.25" selected>0,25×</option>
+                <option value="0.5">0,5×</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="bt-preview">Предпросмотр JSON-пресета (схема v2):</label>
+          <textarea id="bt-preview" class="code-preview" readonly></textarea>
+        </div>
+
+        <div class="cfg-footer">
+          <div>
+            <button type="button" class="btn-action" id="bt-download-btn">Скачать browser-tweaks-settings.json</button>
+            <button type="button" class="btn-action secondary" id="bt-copy-btn">Скопировать JSON</button>
+          </div>
+          <span class="status-pill" id="bt-status" aria-live="polite"></span>
+        </div>
+      </div>
+
+      <!-- Панель 2: Firefox user.js -->
+      <div class="cfg-pane" id="pane-ff" role="tabpanel" aria-labelledby="tab-ff" hidden>
+        <div class="cfg-columns">
+          <div class="cfg-box">
+            <h4>Параметры темы Firefox-Mod-Blur</h4>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.disable.custom.font"><span>Отключить шрифт Ubuntu Light в интерфейсе Firefox</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.disable.tab.preview.panel.fully"><span>Скрыть всплывающее превью вкладки</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.compact.vertical.tabs"><span>Компактные вертикальные вкладки</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.disable.scrollbar.in.vertical.tabs"><span>Скрыть скроллбар вертикальных вкладок</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.centered.tabs"><span>Центрировать горизонтальные вкладки</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.searchbox.focus.outline.enable"><span>Контур фокуса поисковой строки</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.search.info.buttons.show.always"><span>Всегда показывать кнопки инфо о сайте</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.combined.extra.blur"><span>Дополнительное размытие меню и панелей</span></label>
+            <label class="chk"><input type="checkbox" data-ff-bool="mod.hide.faded-extensions.inside.extensions-menu"><span>Скрыть неактивные расширения в меню</span></label>
+            <div class="field-inline">
+              <label for="ff-newtab-blur">Размытие фона новой вкладки (1–10):</label>
+              <input type="number" id="ff-newtab-blur" min="1" max="10" value="5" style="width:74px">
+            </div>
+            <div class="field-inline">
+              <label for="ff-ext-cols">Значков расширений в ряду (1–10):</label>
+              <input type="number" id="ff-ext-cols" min="1" max="10" value="4" style="width:74px">
+            </div>
+          </div>
+
+          <div class="cfg-box">
+            <h4>Включённые модульные CSS-моды</h4>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.macos.window.buttons" checked><span>Кнопки управления окном в стиле macOS</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.firefox.menu.icon" checked><span>Иконка меню в виде логотипа Firefox</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.main.menu.icons" checked><span>Иконки у пунктов главного меню</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.cleaner.extensions.menu" checked><span>Компактная сетка меню расширений</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.colored.sound.tab" checked><span>Цветная подсветка звучащей вкладки</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.overflow.only.alltabs" checked><span>Кнопка «Все вкладки» только при переполнении</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.remove.bookmark.folder.icons" checked><span>Скрывать значки папок на панели закладок</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.white.github.bookmark.icon" checked><span>Белая иконка GitHub на панели закладок</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.ublock.icon.change" checked><span>Кастомный значок uBlock Origin</span></label>
+            <label class="chk"><input type="checkbox" data-ff-mod="mod.disable.thin.scrollbar" checked><span>Тонкие полосы прокрутки страниц</span></label>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="ff-preview">Предпросмотр файла user.js:</label>
+          <textarea id="ff-preview" class="code-preview" readonly></textarea>
+        </div>
+
+        <div class="cfg-footer">
+          <div>
+            <button type="button" class="btn-action" id="ff-download-btn">Скачать user.js</button>
+            <button type="button" class="btn-action secondary" id="ff-copy-btn">Скопировать user.js</button>
+          </div>
+          <span class="status-pill" id="ff-status" aria-live="polite"></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>CSS-модификации основаны на <a href="https://github.com/datguypiko/Firefox-Mod-Blur">Firefox-Mod-Blur</a>. <a href="https://github.com/SolasFor/Browser#readme">README проекта</a>.</footer>
+</main>
+
+<script>
+(function () {
+  const tabBt = document.getElementById('tab-bt');
+  const tabFf = document.getElementById('tab-ff');
+  const paneBt = document.getElementById('pane-bt');
+  const paneFf = document.getElementById('pane-ff');
+
+  function activateTab(which) {
+    const isBt = which === 'bt';
+    tabBt.setAttribute('aria-selected', String(isBt));
+    tabFf.setAttribute('aria-selected', String(!isBt));
+    paneBt.hidden = !isBt;
+    paneFf.hidden = isBt;
+  }
+  tabBt.addEventListener('click', () => activateTab('bt'));
+  tabFf.addEventListener('click', () => activateTab('ff'));
+
+  function normalizeDomain(raw) {
+    let val = String(raw || '').trim().toLowerCase().replace(/^\*\./, '').replace(/^\.+/, '');
+    if (!val) return '';
+    try {
+      const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(val) ? val : 'https://' + val;
+      const h = new URL(candidate).hostname.replace(/\.+$/, '').replace(/^\.+/, '');
+      if (!h || /\s/.test(h) || h.includes('..')) return '';
+      if (h !== 'localhost' && !h.includes('.') && !h.startsWith('[')) return '';
+      return h;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function buildBtJson() {
+    const rawLines = document.getElementById('bt-excl-hosts').value.split(/\r?\n/);
+    const excludedHosts = Array.from(new Set(rawLines.map(normalizeDomain).filter(Boolean)));
+    const hideOn = document.getElementById('bt-yt-hide').checked;
+
+    const payload = {
+      app: 'Browser Tweaks',
+      schemaVersion: 2,
+      scriptVersion: '1.3.0',
+      exportedAt: new Date().toISOString(),
+      font: {
+        enabled: document.getElementById('bt-font-enabled').checked,
+        intensity: document.getElementById('bt-font-intensity').value,
+        excludedHosts: excludedHosts,
+        siteIntensity: {}
+      },
+      global: {
+        settings: {
+          globalVideoSpeed: document.getElementById('bt-g-speed').checked,
+          globalPiPHotkey: document.getElementById('bt-g-pip').checked,
+          cleanTrackingUrl: document.getElementById('bt-g-cleanurl').checked
+        }
+      },
+      youtube: {
+        settings: {
+          smoothAnim: document.getElementById('bt-yt-smooth').checked,
+          hideElements: hideOn,
+          hidePlayerClutter: true,
+          hideActionButtons: true,
+          hideSidebarExtras: true,
+          hideHeaderExtras: true,
+          hidePromosAndShorts: true,
+          wheelSpeed: document.getElementById('bt-yt-wheel').checked,
+          translateComments: document.getElementById('bt-yt-trans').checked,
+          compactMode: document.getElementById('bt-yt-compact').checked,
+          autoQuality: document.getElementById('bt-yt-autoq').checked,
+          speedHotkeys: document.getElementById('bt-yt-hotkeys').checked,
+          videoScreenshot: document.getElementById('bt-yt-shot').checked,
+          autoTheater: document.getElementById('bt-yt-theater').checked,
+          focusMode: document.getElementById('bt-yt-focus').checked,
+          rememberChannelSpeed: document.getElementById('bt-yt-chspeed').checked
+        },
+        quality: document.getElementById('bt-yt-quality').value,
+        speedStep: Number(document.getElementById('bt-yt-step').value),
+        channelSpeeds: {}
+      },
+      ui: {
+        panelPosition: null,
+        panelHotkey: document.getElementById('bt-panel-hotkey').value
+      }
+    };
+    return JSON.stringify(payload, null, 2);
+  }
+
+  function buildFirefoxUserJs() {
+    const lines = [
+      '// Firefox Customization — сгенерировано конфигуратором SolasFor/Browser',
+      '// Поместите файл user.js в корень папки профиля Firefox и перезапустите браузер.',
+      '',
+      'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);',
+      'user_pref("svg.context-properties.content.enabled", true);',
+      'user_pref("layout.css.backdrop-filter.enabled", true);',
+      ''
+    ];
+
+    document.querySelectorAll('[data-ff-bool]').forEach(cb => {
+      if (cb.checked) {
+        lines.push('user_pref("' + cb.getAttribute('data-ff-bool') + '", true);');
+      }
+    });
+
+    const blurVal = Math.min(10, Math.max(1, Number(document.getElementById('ff-newtab-blur').value) || 5));
+    const extCols = Math.min(10, Math.max(1, Number(document.getElementById('ff-ext-cols').value) || 4));
+    if (blurVal !== 5) lines.push('user_pref("mod.new-tab.background.blur", ' + blurVal + ');');
+    if (extCols !== 4) lines.push('user_pref("mod.number.of.extensions.in.a.row", ' + extCols + ');');
+
+    const disabledMods = [];
+    document.querySelectorAll('[data-ff-mod]').forEach(cb => {
+      if (!cb.checked) {
+        disabledMods.push('user_pref("' + cb.getAttribute('data-ff-mod') + '", true);');
+      }
+    });
+    if (disabledMods.length) {
+      lines.push('', '// Отключённые модульные CSS-моды:');
+      disabledMods.forEach(l => lines.push(l));
+    }
+
+    return lines.join('\n') + '\n';
+  }
+
+  const btPreview = document.getElementById('bt-preview');
+  const ffPreview = document.getElementById('ff-preview');
+
+  function refreshBt() { btPreview.value = buildBtJson(); }
+  function refreshFf() { ffPreview.value = buildFirefoxUserJs(); }
+
+  paneBt.querySelectorAll('input, select, textarea:not(#bt-preview)').forEach(el => {
+    el.addEventListener('input', refreshBt);
+    el.addEventListener('change', refreshBt);
+  });
+  paneFf.querySelectorAll('input, select').forEach(el => {
+    el.addEventListener('input', refreshFf);
+    el.addEventListener('change', refreshFf);
+  });
+
+  function showStatus(id, msg) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = msg;
+    setTimeout(() => { if (el.textContent === msg) el.textContent = ''; }, 2400);
+  }
+
+  function downloadText(filename, text, mime) {
+    const blob = new Blob([text], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1500);
+  }
+
+  document.getElementById('bt-download-btn').addEventListener('click', () => {
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    downloadText('browser-tweaks-settings-' + dateStamp + '.json', btPreview.value, 'application/json;charset=utf-8');
+    showStatus('bt-status', 'Файл настроек JSON скачан');
+  });
+
+  document.getElementById('bt-copy-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(btPreview.value).then(
+      () => showStatus('bt-status', 'JSON скопирован в буфер обмена'),
+      () => showStatus('bt-status', 'Выделите текст в поле предпросмотра для копирования')
+    );
+  });
+
+  document.getElementById('ff-download-btn').addEventListener('click', () => {
+    downloadText('user.js', ffPreview.value, 'text/javascript;charset=utf-8');
+    showStatus('ff-status', 'Файл user.js скачан');
+  });
+
+  document.getElementById('ff-copy-btn').addEventListener('click', () => {
+    navigator.clipboard.writeText(ffPreview.value).then(
+      () => showStatus('ff-status', 'Содержимое user.js скопировано'),
+      () => showStatus('ff-status', 'Выделите текст в поле предпросмотра для копирования')
+    );
+  });
+
+  refreshBt();
+  refreshFf();
+})();
+</script>
+</body>
+</html>
