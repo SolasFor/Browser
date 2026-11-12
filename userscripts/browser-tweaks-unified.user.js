@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Browser Tweaks — Ubuntu Light + YouTube
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.0.1
+// @version      1.0.2
 // @description  Глобальный Ubuntu Light и набор настроек YouTube в одной панели
 // @author       SolasFor
 // @homepageURL  https://github.com/SolasFor/Browser
@@ -33,6 +33,14 @@
     };
     const matchesHost = excludedHost => host === excludedHost || host.endsWith('.' + excludedHost);
     const isFontExcluded = () => getExcludedHosts().some(matchesHost);
+    let fontIntensity = 'strong';
+    try { const v = GM_getValue(FONT_INTENSITY_KEY, 'strong'); if (['soft','strong'].includes(v)) fontIntensity = v; } catch (_) {}
+    let fontStyleHandle = null;
+    let excludeBtn = null;
+    const syncExcludeButton = () => {
+        if (excludeBtn) excludeBtn.textContent = isFontExcluded() ? 'Включить на этом сайте' : 'Исключить этот сайт';
+    };
+    GM_addStyle(`@font-face { font-family:"Ubuntu Light Custom"; src:url("${FONT_URL}") format("woff2"); font-weight:100 500; font-style:normal; font-display:swap; }`);
     function toggleFontExclusion() {
         const excluded = isFontExcluded();
         const hosts = getExcludedHosts();
@@ -40,21 +48,18 @@
         try { GM_setValue(FONT_EXCLUDED_KEY, [...new Set(next)]); } catch (_) {}
         const nowExcluded = isFontExcluded();
         if (nowExcluded) {
-            if (fontStyleHandle && fontStyleHandle.remove) fontStyleHandle.remove();
+            if (fontStyleHandle && typeof fontStyleHandle.remove === 'function') fontStyleHandle.remove();
             fontStyleHandle = null;
         } else applyGlobalFont();
+        syncExcludeButton();
         return nowExcluded;
     }
-    let fontIntensity = 'strong';
-    try { const v = GM_getValue(FONT_INTENSITY_KEY, 'strong'); if (['soft','strong'].includes(v)) fontIntensity = v; } catch (_) {}
-    let fontStyleHandle = null;
     function applyGlobalFont() {
         if (fontStyleHandle && typeof fontStyleHandle.remove === 'function') fontStyleHandle.remove();
         fontStyleHandle = null;
         if (isFontExcluded()) return;
         const weight = fontIntensity === 'strong' ? '300' : '350';
         const css = `
-            @font-face { font-family:"Ubuntu Light Custom"; src:url("${FONT_URL}") format("woff2"); font-weight:100 500; font-style:normal; font-display:swap; }
             body, body :is(p,span,div,a,li,td,th,label,button,input,textarea,select,h1,h2,h3,h4,h5,h6,blockquote,figcaption,summary,legend,small,strong,em) {
                 font-family:"Ubuntu Light Custom","Ubuntu",sans-serif !important;
                 font-weight:${weight} !important;
@@ -93,12 +98,12 @@
         intensityRow.append(intensityLabel, select); section.appendChild(intensityRow);
 
         const exclude = document.createElement('button');
+        excludeBtn = exclude;
         exclude.type = 'button';
-        exclude.textContent = isFontExcluded() ? 'Включить на этом сайте' : 'Исключить этот сайт';
+        syncExcludeButton();
         exclude.style.cssText = buttonStyle || 'width:100%;padding:7px;background:rgba(96,100,110,.37);color:#dce1e8;border:1px solid #555b6b;border-radius:5px;cursor:pointer';
         exclude.addEventListener('click', () => {
-            const excluded = toggleFontExclusion();
-            exclude.textContent = excluded ? 'Включить на этом сайте' : 'Исключить этот сайт';
+            toggleFontExclusion();
         });
         section.appendChild(exclude);
         const note = document.createElement('div');
@@ -109,7 +114,7 @@
     }
 
     function createGlobalFontPanel() {
-        if (document.getElementById('retube-settings-panel')) return;
+        if (!document.body || document.getElementById('retube-settings-panel')) return;
         const panel = document.createElement('div');
         panel.id = 'retube-settings-panel';
         panel.style.cssText = 'position:fixed;z-index:2147483646;right:22px;top:80px;width:320px;padding:12px;background:rgba(30,32,40,.94);color:#fff;border:1px solid rgba(160,175,205,.3);border-radius:12px;font:300 14px/1.4 system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.35);backdrop-filter:blur(14px);display:none';
@@ -126,6 +131,7 @@
     }
     window.addEventListener('keydown', e => {
         if (!(e.altKey && e.shiftKey && e.code === 'KeyU') || e.repeat || e.ctrlKey || e.metaKey) return;
+        e.preventDefault();
         toggleFontExclusion();
     }, true);
 
@@ -196,18 +202,10 @@
     };
 
     // ==========================================
-    // 0.2. БАЗОВЫЕ СТИЛИ И ШРИФТ (ИСПРАВЛЕНО)
+    // 0.2. БАЗОВЫЕ СТИЛИ АНИМАЦИИ ПАНЕЛИ
     // ==========================================
 
     GM_addStyle(`
-        @font-face {
-            font-family: "Ubuntu Light Custom";
-            /* Ссылка на GitHub Pages для корректной загрузки шрифта */
-            src: url("https://raw.githubusercontent.com/SolasFor/Browser/main/fonts/Ubuntu%20Light.woff2") format("woff2");
-            font-weight: 300;
-            font-style: normal;
-            font-display: swap;
-        }
         @keyframes retubeShow {
             from { opacity: 0; }
             to { opacity: 1; }
@@ -297,30 +295,31 @@
 
     const QUALITY_MAP = { 'hd720': 'HD (720p)', 'hd1080': 'FHD (1080p)', 'hd1440': '2K (1440p)', 'hd2160': '4K (2160p)' };
 
+    function setPreferredQuality() {
+        const player = document.querySelector('#movie_player');
+        if (!player || !player.getAvailableQualityLevels) return;
+        const available = player.getAvailableQualityLevels();
+        if (!available || available.length === 0) return;
+        const current = player.getPlaybackQuality ? player.getPlaybackQuality() : '';
+        if (current === selectedQuality) return;
+        let target = selectedQuality;
+        if (!available.includes(selectedQuality)) {
+            const order = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
+            const targetIndex = order.indexOf(selectedQuality);
+            const fallback = order.slice(Math.max(0, targetIndex + 1)).find(level => available.includes(level));
+            target = fallback || order.find(level => available.includes(level)) || available[0];
+        }
+        if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(target, target);
+        if (player.setPlaybackQuality) player.setPlaybackQuality(target);
+    }
+
     function applyAutoQuality() {
-        if (qualityObserver) return;
-        const setQuality = () => {
-            const player = document.querySelector('#movie_player');
-            if (!player || !player.getAvailableQualityLevels) return;
-            const available = player.getAvailableQualityLevels();
-            if (!available || available.length === 0) return;
-            const current = player.getPlaybackQuality ? player.getPlaybackQuality() : '';
-            if (current === selectedQuality) return;
-            let target = selectedQuality;
-            if (!available.includes(selectedQuality)) {
-                const order = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
-                const targetIndex = order.indexOf(selectedQuality);
-                const fallback = order.slice(Math.max(0, targetIndex + 1)).find(level => available.includes(level));
-                target = fallback || order.find(level => available.includes(level)) || available[0];
-            }
-            if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(target, target);
-            if (player.setPlaybackQuality) player.setPlaybackQuality(target);
-        };
-        const checkQuality = () => { clearTimeout(qualityTimeout); qualityTimeout = setTimeout(setQuality, 1000); };
+        if (qualityObserver || !document.body) return;
+        const checkQuality = () => { clearTimeout(qualityTimeout); qualityTimeout = setTimeout(setPreferredQuality, 1000); };
         qualityObserver = new MutationObserver(() => checkQuality());
         qualityObserver.observe(document.body, { childList: true, subtree: true });
         checkQuality();
-        qualityInterval = setInterval(() => { if (!settings.autoQuality) { clearInterval(qualityInterval); return; } setQuality(); }, 5000);
+        qualityInterval = setInterval(() => { if (!settings.autoQuality) { clearInterval(qualityInterval); return; } setPreferredQuality(); }, 5000);
     }
 
     function removeAutoQuality() {
@@ -407,7 +406,7 @@
     let translateObserver = null;
     function isRussian(text) {
         const value = (text || '').toLowerCase();
-        if (/[іїєґўђјљњћќџъыэѝ]/i.test(value)) return false;
+        if (/[іїєґўђјљњћќџѝ]/i.test(value)) return false;
         return /[а-яё]/i.test(value) && !/[a-z]{3,}/i.test(value);
     }
     function getTranslationCache() {
@@ -437,7 +436,7 @@
     }
 
     function applyTranslateComments() {
-        if (translateObserver) return;
+        if (translateObserver || !document.body) return;
         const addTranslateButtons = () => {
             const comments = document.querySelectorAll('ytd-comment-view-model #content-text, ytd-comment-renderer #content-text');
             comments.forEach(textEl => {
@@ -592,7 +591,7 @@
     }
 
     function createSettingsPanel() {
-        if (document.getElementById('retube-settings-panel')) return;
+        if (!document.body || document.getElementById('retube-settings-panel')) return;
 
         const panel = document.createElement('div');
         panel.id = 'retube-settings-panel';
@@ -703,10 +702,7 @@
         qualitySelect.addEventListener('change', (e) => {
             selectedQuality = e.target.value;
             try { localStorage.setItem(QUALITY_KEY, selectedQuality); } catch (err) {}
-            if (settings.autoQuality) {
-                const player = document.querySelector('#movie_player');
-                if (player && player.setPlaybackQualityRange) player.setPlaybackQualityRange(selectedQuality, selectedQuality);
-            }
+            if (settings.autoQuality) setPreferredQuality();
         });
         qualityRow.appendChild(qualitySelect);
         panel.appendChild(qualityRow);
@@ -767,6 +763,7 @@
             checkbox.addEventListener('change', e => {
                 settings[key] = e.target.checked;
                 toggleFeature(key, e.target.checked);
+                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (err) {}
             });
         });
 
@@ -774,6 +771,7 @@
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
                 localStorage.setItem(QUALITY_KEY, selectedQuality);
+                localStorage.setItem(SPEED_STEP_KEY, String(speedStep));
                 saveBtn.textContent = 'Сохранено ✓';
                 setTimeout(() => { saveBtn.textContent = 'Сохранить'; }, 1200);
             } catch (e) {}

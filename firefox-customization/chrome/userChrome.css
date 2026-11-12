@@ -12,36 +12,15 @@
 ===================== E X T R A   M O D S =======================
 ===============================================================*/
 
-@import url("privacy_blur_email_in_main_menu.css");
-@import url("privacy_blur_email_in_sync_menu.css");
-@import url("firefox_view_icon_change.css");
-@import url("no_search_engines_in_url_bar.css");
 @import url("white_github_icon_in_bookmarks.css");
 @import url("only_show_list-all-tabs_when_tabs_overflowing.css");
 @import url("right-min-max-close_buttons.css");
-@import url("acrylic_micaforeveryone.css");
-@import url("privacy_blur_tabs_content.css");
-@import url("popout_bookmarks_bar_on_hover.css");
-@import url("push_bookmarks_bar_on_hover.css");
 @import url("remove_folder_icons_from_bookmarks.css");
-@import url("bookmarks_bar_same_color_as_toolbar.css");
 @import url("icons_in_main_menu.css");
 @import url("ublock-icon-change.css");
-@import url("selected_tabs_static_width.css");
-@import url("autohide_tab_and_bookmarks_bars.css");
-@import url("url_bar_no_border.css");
-@import url("search_bar_transparent_background.css");
 @import url("cleaner_extensions_menu.css");
 @import url("colored_soundplaying_tab.css");
 @import url("menu_icon_change_to_firefox.css");
-@import url("pinned_tabs_no_bg_color.css");
-@import url("reversed_tabs_bg_color.css");
-@import url("transparent_tabs_bg_color.css");
-@import url("tabs_separator.css");
-@import url("searchbox_text_align_left.css");
-@import url("tabs_take_full_bar_width.css");
-@import url("show_searchbar_dots_only_on_hover.css");
-@import url("thicker_control_buttons.css");
 
 /*=====================================================================
 ================= D A R K   T H E M E   C O L O R S ===================
@@ -1620,11 +1599,11 @@ menuitem {
 
   &:where([_moz-menuactive]:not([disabled="true"])) {
     color: -moz-menuhovertext;
-    background-color: var(--firefoxcss-context-menu-item-bg-color), initial) !important;
+    background-color: var(--firefoxcss-context-menu-item-bg-color, initial) !important;
   }
 
   &:where([_moz-menuactive="true"][disabled="true"]) {
-    background-color: var(var(--firefoxcss-context-menu-item-bg-color-inactive), initial) !important;
+    background-color: var(--firefoxcss-context-menu-item-bg-color-inactive, initial) !important;
   }
 }
 
@@ -2290,7 +2269,7 @@ toolbar .toolbarbutton-1:not([disabled="true"]):is([open], [checked], :hover:act
     .urlbar-revert-button,
     .search-go-button {
       &:not([disabled]):hover {
-        background-color: var(var(--toolbarbutton-hover-background), initial)  !important;
+        background-color: var(--toolbarbutton-hover-background, initial) !important;
       }
     }
 
@@ -2301,7 +2280,7 @@ toolbar .toolbarbutton-1:not([disabled="true"]):is([open], [checked], :hover:act
     .identity-box-button,
     #tracking-protection-icon-container {
       &:hover:not([open="true"]) {
-        background-color: var(var(--toolbarbutton-hover-background), initial)  !important;
+        background-color: var(--toolbarbutton-hover-background, initial) !important;
       }
     }
 
@@ -4083,11 +4062,10 @@ panel-item.searchmode-switcher-installed {
   &[label="Bing"] {       --icon-url: var(--firefoxcss-bing-icon) !important;}
   &[label*="Startpage"] { --icon-url: var(--firefoxcss-startpage-icon) !important;}
   &[label="Brave"] {      --icon-url: var(--firefoxcss-brave-icon) !important;}
-  
+}
 }
 
-
 * {
-    font-family: "Ubuntu Light", "Ubuntu", sans-serif !important;
-font-weight: 300 !important;
+  font-family: "Ubuntu Light", "Ubuntu", sans-serif !important;
+  font-weight: 300 !important;
 }

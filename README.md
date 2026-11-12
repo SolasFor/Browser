@@ -33,7 +33,7 @@
 **Browser Tweaks** — единый пользовательский скрипт, объединяющий настройки шрифта Ubuntu Light для сайтов и дополнительные инструменты для YouTube. Функции разделены по назначению: глобальные настройки применяются на обычных сайтах, а инструменты YouTube активируются только на YouTube.
 
 <p align="center">
-  <a href="userscripts/browser-tweaks-unified.user.js"><strong>Установить Browser Tweaks</strong></a>
+  <a href="https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js"><strong>Установить Browser Tweaks</strong></a>
 </p>
 
 Для установки и управления скриптом используется расширение [Violentmonkey](https://violentmonkey.github.io/).
@@ -78,7 +78,7 @@
 ## Установка Browser Tweaks
 
 1. Установите расширение [Violentmonkey](https://violentmonkey.github.io/) для своего браузера.
-2. Откройте файл [browser-tweaks-unified.user.js](userscripts/browser-tweaks-unified.user.js).
+2. Откройте прямую ссылку на скрипт [browser-tweaks-unified.user.js](https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js) (исходный код: [`userscripts/browser-tweaks-unified.user.js`](userscripts/browser-tweaks-unified.user.js)).
 3. Подтвердите установку скрипта в открывшемся интерфейсе Violentmonkey.
 4. Перейдите на любой сайт и нажмите `F2`, чтобы открыть панель настроек.
 5. Настройте Ubuntu Light и, при необходимости, функции YouTube.
@@ -94,6 +94,8 @@ Browser/
 ├── firefox-customization/
 │   ├── README.md
 │   └── chrome/
+├── fonts/
+│   └── Ubuntu Light.woff2
 ├── userscripts/
 │   └── browser-tweaks-unified.user.js
 ├── index.html
@@ -101,6 +103,7 @@ Browser/
 ```
 
 - `firefox-customization/` — руководство и файлы оформления Firefox.
+- `fonts/` — веб-шрифт `Ubuntu Light.woff2`, загружаемый пользовательским скриптом.
 - `userscripts/` — единый пользовательский скрипт Browser Tweaks.
 - `index.html` — главная страница проекта.
 
@@ -120,6 +123,6 @@ Browser/
 ## Ссылки
 
 - **[Главная страница проекта](https://solasfor.github.io/Browser/)**
-- **[Установить Browser Tweaks](userscripts/browser-tweaks-unified.user.js)**
+- **[Установить Browser Tweaks](https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js)**
 - **[Руководство Firefox Customization](firefox-customization/README.md)**
 - **[Violentmonkey](https://violentmonkey.github.io/)**

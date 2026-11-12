@@ -1,7 +1,5 @@
 /* ----- Included functions ----- */
 @import url("thin_scrollbar_windows10.css");
-@import url("remove_homepage_shortcut_title_text.css");
-@import url("circular_homepage_shortcuts.css");
 
 /*=====================================================================
 ================= D A R K   T H E M E   C O L O R S ===================
@@ -300,7 +298,7 @@ url("about:newtab") {
 
   /* HIDING ELEMENTS in NEW TAB */
   /*  Disable phone button in new tab */
-  .mobileDownloadPromoWrapper.
+  .mobileDownloadPromoWrapper,
    /* Remove photo attribution when wallpaper for new tab is set */
   .wallpaper-attribution,
   /*  Hide privacy notice button below top stories section */
