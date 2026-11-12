@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Browser Tweaks — Ubuntu Light + YouTube
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.1.1
+// @version      1.2.0
 // @description  Глобальный шрифт Ubuntu Light и модульные инструменты YouTube в единой изолированной панели
 // @author       SolasFor
 // @homepageURL  https://github.com/SolasFor/Browser
@@ -29,6 +29,7 @@
     // 0. КОНСТАНТЫ, СРЕДА И МЕНЕДЖЕР СТИЛЕЙ
     // ==========================================
 
+    const SCRIPT_VERSION = '1.2.0';
     const FONT_URL = 'https://raw.githubusercontent.com/SolasFor/Browser/main/fonts/Ubuntu%20Light.woff2';
     const FONT_ENABLED_KEY = 'unifiedUbuntuLightEnabled';
     const FONT_EXCLUDED_KEY = 'unifiedUbuntuLightExcludedHosts';
@@ -119,9 +120,35 @@
 
     let fontEnabled = Boolean(gmGet(FONT_ENABLED_KEY, true));
 
+    function normalizeHostInput(raw) {
+        if (typeof raw !== 'string') return '';
+        let val = raw.trim().toLowerCase();
+        if (!val) return '';
+        val = val.replace(/^\*\./, '').replace(/^\.+/, '');
+        try {
+            const candidate = /^[a-z][a-z0-9+.-]*:\/\//i.test(val) ? val : 'https://' + val;
+            const parsed = new URL(candidate).hostname.replace(/\.+$/, '').replace(/^\.+/, '');
+            if (!parsed || /\s/.test(parsed) || parsed.includes('..')) return '';
+            if (parsed !== 'localhost' && !parsed.includes('.') && !parsed.startsWith('[')) return '';
+            return parsed;
+        } catch (_) {
+            return '';
+        }
+    }
+
     const getExcludedHosts = () => {
         const list = gmGet(FONT_EXCLUDED_KEY, []);
-        return Array.isArray(list) ? list : [];
+        if (!Array.isArray(list)) return [];
+        const seen = new Set();
+        const result = [];
+        for (let i = 0; i < list.length; i++) {
+            const item = typeof list[i] === 'string' ? list[i].trim().toLowerCase() : '';
+            if (item && !seen.has(item)) {
+                seen.add(item);
+                result.push(item);
+            }
+        }
+        return result;
     };
     const matchesHost = excludedHost => Boolean(excludedHost) && (host === excludedHost || host.endsWith('.' + excludedHost));
     const isFontExcluded = () => !host || getExcludedHosts().some(matchesHost);
@@ -321,6 +348,7 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-shrink: 0;
             padding: 10px 14px;
             background: rgba(67, 77, 105, 0.3);
             border-bottom: 1px solid rgba(160, 175, 205, 0.14);
@@ -346,6 +374,9 @@
             display: flex;
             flex-direction: column;
             gap: 4px;
+        }
+        .bt-body > * {
+            flex-shrink: 0;
         }
         .bt-row-check {
             display: flex;
@@ -512,6 +543,146 @@
         .bt-btn:disabled, .bt-select:disabled {
             cursor: not-allowed;
         }
+        .bt-btn-sm {
+            padding: 5px 9px;
+            font-size: 12px;
+        }
+        .bt-excl-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            width: 100%;
+            padding: 6px 9px;
+            background: rgba(78, 86, 106, 0.28);
+            color: #d7e0ed;
+            border: 1px solid rgba(145, 160, 190, 0.24);
+            border-radius: 6px;
+            font: inherit;
+            font-size: 12.5px;
+            cursor: pointer;
+            text-align: left;
+            transition: background 0.15s ease;
+        }
+        .bt-excl-toggle:hover {
+            background: rgba(98, 108, 132, 0.44);
+        }
+        .bt-excl-chevron {
+            font-size: 11px;
+            color: #9fb0cb;
+            transition: transform 0.15s ease;
+        }
+        .bt-excl-toggle[aria-expanded="true"] .bt-excl-chevron {
+            transform: rotate(180deg);
+        }
+        .bt-excl-panel {
+            display: none;
+            flex-direction: column;
+            gap: 6px;
+            padding: 7px;
+            border-radius: 7px;
+            background: rgba(42, 47, 60, 0.48);
+            border: 1px solid rgba(140, 155, 185, 0.18);
+        }
+        .bt-excl-panel.open {
+            display: flex;
+        }
+        .bt-excl-form {
+            display: flex;
+            gap: 5px;
+        }
+        .bt-input {
+            flex: 1;
+            min-width: 0;
+            padding: 5px 8px;
+            background: rgba(28, 32, 42, 0.78);
+            color: #e6ebf4;
+            border: 1px solid rgba(135, 148, 175, 0.35);
+            border-radius: 6px;
+            font: inherit;
+            font-size: 12px;
+            outline: none;
+        }
+        .bt-input::placeholder {
+            color: #8590a4;
+        }
+        .bt-input:focus {
+            border-color: rgba(150, 176, 224, 0.68);
+        }
+        .bt-excl-list {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            max-height: 142px;
+            overflow-y: auto;
+        }
+        .bt-excl-empty {
+            padding: 6px 4px;
+            font-size: 12px;
+            color: #8f9ab0;
+            text-align: center;
+        }
+        .bt-excl-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            padding: 4px 7px;
+            border-radius: 5px;
+            background: rgba(74, 82, 102, 0.26);
+            border: 1px solid rgba(140, 155, 185, 0.15);
+        }
+        .bt-excl-item-info {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            flex: 1;
+        }
+        .bt-excl-domain {
+            font-size: 12px;
+            color: #dce4f0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .bt-excl-badge {
+            flex-shrink: 0;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 10.5px;
+            background: rgba(112, 152, 224, 0.22);
+            color: #a9c7ff;
+            border: 1px solid rgba(128, 166, 232, 0.3);
+        }
+        .bt-excl-remove {
+            width: 20px;
+            height: 20px;
+            padding: 0;
+            flex-shrink: 0;
+            border: 1px solid rgba(175, 115, 115, 0.3);
+            border-radius: 4px;
+            background: rgba(135, 75, 75, 0.25);
+            color: #f0d6d6;
+            font: inherit;
+            font-size: 13px;
+            line-height: 1;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease;
+        }
+        .bt-excl-remove:hover {
+            background: rgba(170, 90, 90, 0.55);
+        }
+        .bt-backup-row {
+            display: flex;
+            gap: 6px;
+        }
+        .bt-backup-row .bt-btn {
+            flex: 1;
+        }
     `;
 
     function syncHostFontState() {
@@ -592,6 +763,56 @@
         if (tooltipEl) tooltipEl.classList.remove('visible');
     }
 
+    function renderExcludedHostsList() {
+        if (!uiRefs || !uiRefs.exclList) return;
+        const hosts = getExcludedHosts();
+        if (uiRefs.exclToggleText) {
+            uiRefs.exclToggleText.textContent = `Исключённые сайты (${hosts.length})`;
+        }
+        if (uiRefs.exclClearBtn) {
+            uiRefs.exclClearBtn.style.display = hosts.length ? '' : 'none';
+        }
+        uiRefs.exclList.textContent = '';
+        if (!hosts.length) {
+            const empty = document.createElement('div');
+            empty.className = 'bt-excl-empty';
+            empty.textContent = 'Список исключений пуст';
+            uiRefs.exclList.appendChild(empty);
+            return;
+        }
+        hosts.forEach(domain => {
+            const item = document.createElement('div');
+            item.className = 'bt-excl-item';
+
+            const info = document.createElement('div');
+            info.className = 'bt-excl-item-info';
+
+            const domainSpan = document.createElement('span');
+            domainSpan.className = 'bt-excl-domain';
+            domainSpan.title = domain;
+            domainSpan.textContent = domain;
+            info.appendChild(domainSpan);
+
+            if (host && matchesHost(domain)) {
+                const badge = document.createElement('span');
+                badge.className = 'bt-excl-badge';
+                badge.textContent = 'этот сайт';
+                info.appendChild(badge);
+            }
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'bt-excl-remove';
+            removeBtn.title = 'Удалить из исключений';
+            removeBtn.setAttribute('aria-label', 'Удалить ' + domain);
+            removeBtn.textContent = '×';
+            removeBtn.addEventListener('click', () => removeExcludedHost(domain, true));
+
+            item.append(info, removeBtn);
+            uiRefs.exclList.appendChild(item);
+        });
+    }
+
     function syncFontUI() {
         syncHostFontState();
         if (!uiRefs) return;
@@ -615,6 +836,47 @@
                 ? 'Действует на всех сайтах. Alt + Shift + F — выключить полностью; Alt + Shift + U — исключить этот сайт.'
                 : 'Кастомный шрифт полностью выключен на всех сайтах и в панели. Alt + Shift + F — включить обратно.';
         }
+        renderExcludedHostsList();
+    }
+
+    function addExcludedHost(rawInput, showFeedback = true) {
+        const normalized = normalizeHostInput(rawInput);
+        if (!normalized) {
+            if (showFeedback) showOSD('Введите корректный домен (например, example.com)', 'off');
+            return { ok: false, reason: 'invalid' };
+        }
+        const hosts = getExcludedHosts();
+        if (hosts.includes(normalized)) {
+            if (showFeedback) showOSD('Сайт уже в списке: ' + normalized, 'off');
+            return { ok: false, reason: 'duplicate', host: normalized };
+        }
+        gmSet(FONT_EXCLUDED_KEY, [...hosts, normalized]);
+        applyGlobalFont();
+        syncFontUI();
+        if (showFeedback) showOSD('Добавлено в исключения: ' + normalized, 'off');
+        return { ok: true, host: normalized };
+    }
+
+    function removeExcludedHost(targetHost, showFeedback = true) {
+        const normalized = normalizeHostInput(targetHost) || String(targetHost || '').trim().toLowerCase();
+        const hosts = getExcludedHosts();
+        const next = hosts.filter(h => h !== normalized);
+        if (next.length === hosts.length) return false;
+        gmSet(FONT_EXCLUDED_KEY, next);
+        applyGlobalFont();
+        syncFontUI();
+        if (showFeedback) showOSD('Удалено из исключений: ' + normalized, 'on');
+        return true;
+    }
+
+    function clearExcludedHosts(showFeedback = true) {
+        const hosts = getExcludedHosts();
+        if (!hosts.length) return false;
+        gmSet(FONT_EXCLUDED_KEY, []);
+        applyGlobalFont();
+        syncFontUI();
+        if (showFeedback) showOSD('Список исключений очищен', 'on');
+        return true;
     }
 
     function setGlobalFontEnabled(nextEnabled, showFeedback = true) {
@@ -1084,7 +1346,8 @@
         if (speedHotkeyHandler) return;
         speedHotkeyHandler = function (e) {
             if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
-            const target = e.target;
+            const composed = typeof e.composedPath === 'function' ? e.composedPath() : null;
+            const target = (composed && composed[0]) || e.target;
             if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
             if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== '0') return;
 
@@ -1333,6 +1596,242 @@
         if (ytSettings.translateComments) applyTranslateComments(); else removeTranslateComments();
     }
 
+    // --- 4.4. Экспорт и импорт настроек в JSON ---
+
+    let standaloneImportInput = null;
+
+    function buildSettingsExportObject() {
+        const storedYt = isYouTube ? ytSettings : gmGet(YT_SETTINGS_KEY, null);
+        const exportedYtSettings = {};
+        Object.keys(DEFAULT_YT_SETTINGS).forEach(key => {
+            const val = storedYt && typeof storedYt === 'object' && storedYt[key] !== undefined
+                ? storedYt[key]
+                : DEFAULT_YT_SETTINGS[key];
+            exportedYtSettings[key] = Boolean(val);
+        });
+
+        const rawQuality = isYouTube ? selectedQuality : gmGet(YT_QUALITY_KEY, 'hd1080');
+        const exportedQuality = QUALITY_MAP[rawQuality] ? rawQuality : 'hd1080';
+
+        const rawStep = isYouTube ? speedStep : Number(gmGet(YT_SPEED_STEP_KEY, 0.25));
+        const exportedSpeedStep = [0.05, 0.1, 0.25, 0.5].includes(rawStep) ? rawStep : 0.25;
+
+        const savedPos = gmGet(PANEL_POS_KEY, null);
+        const exportedPos = savedPos && Number.isFinite(Number(savedPos.left)) && Number.isFinite(Number(savedPos.top))
+            ? { left: Math.round(Number(savedPos.left)), top: Math.round(Number(savedPos.top)) }
+            : null;
+
+        return {
+            app: 'Browser Tweaks',
+            schemaVersion: 1,
+            scriptVersion: SCRIPT_VERSION,
+            exportedAt: new Date().toISOString(),
+            font: {
+                enabled: fontEnabled,
+                intensity: fontIntensity,
+                excludedHosts: getExcludedHosts()
+            },
+            youtube: {
+                settings: exportedYtSettings,
+                quality: exportedQuality,
+                speedStep: exportedSpeedStep
+            },
+            ui: {
+                panelPosition: exportedPos
+            }
+        };
+    }
+
+    function exportSettingsToJsonFile(showFeedback = true) {
+        const jsonText = JSON.stringify(buildSettingsExportObject(), null, 2);
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        const filename = `browser-tweaks-settings-${dateStamp}.json`;
+        try {
+            const blob = new Blob([jsonText], { type: 'application/json;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            link.style.display = 'none';
+            (document.body || document.documentElement).appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => {
+                try { URL.revokeObjectURL(url); } catch (_) {}
+            }, 1500);
+            if (showFeedback) showOSD('Настройки экспортированы в JSON', 'on');
+            return { ok: true, filename, jsonText };
+        } catch (_) {
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(jsonText).then(
+                    () => { if (showFeedback) showOSD('JSON настроек скопирован в буфер обмена', 'on'); },
+                    () => { if (showFeedback) showOSD('Не удалось экспортировать настройки', 'off'); }
+                );
+                return { ok: true, clipboard: true, jsonText };
+            }
+            if (showFeedback) showOSD('Не удалось экспортировать настройки', 'off');
+            return { ok: false };
+        }
+    }
+
+    function applyPanelSavedPosition(pos) {
+        if (!panelEl) return;
+        if (pos && Number.isFinite(Number(pos.left)) && Number.isFinite(Number(pos.top))) {
+            panelEl.style.left = Math.round(Number(pos.left)) + 'px';
+            panelEl.style.top = Math.round(Number(pos.top)) + 'px';
+            panelEl.style.right = 'auto';
+        } else {
+            panelEl.style.left = Math.max(16, window.innerWidth - 356) + 'px';
+            panelEl.style.top = '72px';
+            panelEl.style.right = 'auto';
+        }
+        clampPanelPosition();
+    }
+
+    function applyImportedSettingsObject(data) {
+        if (!data || typeof data !== 'object' || Array.isArray(data)) {
+            throw new Error('Некорректный JSON-объект');
+        }
+        let recognizedCount = 0;
+
+        if (data.font && typeof data.font === 'object' && !Array.isArray(data.font)) {
+            if (typeof data.font.enabled === 'boolean') {
+                fontEnabled = data.font.enabled;
+                gmSet(FONT_ENABLED_KEY, fontEnabled);
+                recognizedCount++;
+            }
+            if (data.font.intensity === 'soft' || data.font.intensity === 'strong') {
+                fontIntensity = data.font.intensity;
+                gmSet(FONT_INTENSITY_KEY, fontIntensity);
+                recognizedCount++;
+            }
+            if (Array.isArray(data.font.excludedHosts)) {
+                const cleanedHosts = [...new Set(data.font.excludedHosts.map(normalizeHostInput).filter(Boolean))];
+                gmSet(FONT_EXCLUDED_KEY, cleanedHosts);
+                recognizedCount++;
+            }
+        }
+
+        if (data.youtube && typeof data.youtube === 'object' && !Array.isArray(data.youtube)) {
+            const currentStoredYt = isYouTube ? ytSettings : gmGet(YT_SETTINGS_KEY, null);
+            const nextYt = Object.assign(
+                {},
+                DEFAULT_YT_SETTINGS,
+                currentStoredYt && typeof currentStoredYt === 'object' ? currentStoredYt : {}
+            );
+            if (data.youtube.settings && typeof data.youtube.settings === 'object' && !Array.isArray(data.youtube.settings)) {
+                let ytKeyMatched = false;
+                Object.keys(DEFAULT_YT_SETTINGS).forEach(key => {
+                    if (typeof data.youtube.settings[key] === 'boolean') {
+                        nextYt[key] = data.youtube.settings[key];
+                        ytKeyMatched = true;
+                    }
+                });
+                if (ytKeyMatched) {
+                    ytSettings = nextYt;
+                    gmSet(YT_SETTINGS_KEY, nextYt);
+                    recognizedCount++;
+                }
+            }
+            if (QUALITY_MAP[data.youtube.quality]) {
+                selectedQuality = data.youtube.quality;
+                gmSet(YT_QUALITY_KEY, selectedQuality);
+                recognizedCount++;
+            }
+            if (data.youtube.speedStep !== undefined) {
+                const stepNum = Number(data.youtube.speedStep);
+                if ([0.05, 0.1, 0.25, 0.5].includes(stepNum)) {
+                    speedStep = stepNum;
+                    gmSet(YT_SPEED_STEP_KEY, stepNum);
+                    recognizedCount++;
+                }
+            }
+        }
+
+        if (data.ui && typeof data.ui === 'object' && !Array.isArray(data.ui)) {
+            if (data.ui.panelPosition === null) {
+                gmSet(PANEL_POS_KEY, null);
+                applyPanelSavedPosition(null);
+                recognizedCount++;
+            } else if (data.ui.panelPosition && typeof data.ui.panelPosition === 'object') {
+                const left = Number(data.ui.panelPosition.left);
+                const top = Number(data.ui.panelPosition.top);
+                if (Number.isFinite(left) && Number.isFinite(top)) {
+                    const saved = { left: Math.round(left), top: Math.round(top) };
+                    gmSet(PANEL_POS_KEY, saved);
+                    applyPanelSavedPosition(saved);
+                    recognizedCount++;
+                }
+            }
+        }
+
+        if (recognizedCount === 0) {
+            throw new Error('Файл не содержит настроек Browser Tweaks');
+        }
+
+        applyGlobalFont();
+        syncFontUI();
+        if (isYouTube) {
+            syncYouTubeFeatures();
+            syncYouTubeUI();
+            if (ytSettings.translateComments) applyTranslateUIStyle();
+            if (ytSettings.autoQuality) setPreferredQuality();
+        }
+    }
+
+    function importSettingsFromJsonText(jsonText, showFeedback = true) {
+        try {
+            const parsed = JSON.parse(String(jsonText || ''));
+            applyImportedSettingsObject(parsed);
+            if (showFeedback) showOSD('Настройки успешно импортированы', 'on');
+            return { ok: true };
+        } catch (err) {
+            const msg = err && err.message && err.message.includes('Browser Tweaks')
+                ? err.message
+                : 'Ошибка импорта: неверный JSON-файл';
+            if (showFeedback) showOSD(msg, 'off');
+            return { ok: false, error: msg };
+        }
+    }
+
+    function createImportFileInput() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.style.display = 'none';
+        input.addEventListener('change', () => {
+            const file = input.files && input.files[0];
+            input.value = '';
+            if (!file) return;
+            if (typeof file.text === 'function') {
+                file.text().then(
+                    text => importSettingsFromJsonText(text, true),
+                    () => showOSD('Не удалось прочитать файл', 'off')
+                );
+            } else if (typeof FileReader !== 'undefined') {
+                const reader = new FileReader();
+                reader.onload = () => importSettingsFromJsonText(String(reader.result || ''), true);
+                reader.onerror = () => showOSD('Не удалось прочитать файл', 'off');
+                reader.readAsText(file);
+            }
+        });
+        return input;
+    }
+
+    function openSettingsImportPicker() {
+        if (uiRefs && uiRefs.importFileInput) {
+            uiRefs.importFileInput.click();
+            return;
+        }
+        const root = ensureShadowHost();
+        if (!root) return;
+        if (!standaloneImportInput) {
+            standaloneImportInput = createImportFileInput();
+            root.appendChild(standaloneImportInput);
+        }
+        standaloneImportInput.click();
+    }
+
     // ==========================================
     // 5. ЛЕНИВЫЙ РЕНДЕР ПАНЕЛИ НАСТРОЕК (SHADOW DOM)
     // ==========================================
@@ -1378,9 +1877,9 @@
         panelEl.setAttribute('aria-label', 'Настройки Browser Tweaks');
 
         const savedPos = gmGet(PANEL_POS_KEY, null);
-        if (savedPos && Number.isFinite(savedPos.left) && Number.isFinite(savedPos.top)) {
-            panelEl.style.left = Math.round(savedPos.left) + 'px';
-            panelEl.style.top = Math.round(savedPos.top) + 'px';
+        if (savedPos && Number.isFinite(Number(savedPos.left)) && Number.isFinite(Number(savedPos.top))) {
+            panelEl.style.left = Math.round(Number(savedPos.left)) + 'px';
+            panelEl.style.top = Math.round(Number(savedPos.top)) + 'px';
         } else {
             panelEl.style.left = Math.max(16, window.innerWidth - 356) + 'px';
             panelEl.style.top = '72px';
@@ -1450,6 +1949,7 @@
             expandBtn.addEventListener('click', () => {
                 const isOpen = subList.classList.toggle('open');
                 expandBtn.setAttribute('aria-expanded', String(isOpen));
+                clampPanelPosition();
             });
 
             body.appendChild(createCheckRow('wheelSpeed', 'Скорость колесом мыши (Shift)', TOOLTIPS.wheelSpeed));
@@ -1574,11 +2074,125 @@
         fontControlsWrap.appendChild(excludeBtn);
         fontCard.appendChild(fontControlsWrap);
 
+        // Управление списком исключённых сайтов
+        const exclToggleBtn = document.createElement('button');
+        exclToggleBtn.type = 'button';
+        exclToggleBtn.className = 'bt-excl-toggle';
+        exclToggleBtn.setAttribute('aria-expanded', 'false');
+        const exclToggleText = document.createElement('span');
+        exclToggleText.textContent = 'Исключённые сайты (0)';
+        const exclChevron = document.createElement('span');
+        exclChevron.className = 'bt-excl-chevron';
+        exclChevron.textContent = '▾';
+        exclToggleBtn.append(exclToggleText, exclChevron);
+        uiRefs.exclToggleText = exclToggleText;
+        fontCard.appendChild(exclToggleBtn);
+
+        const exclPanel = document.createElement('div');
+        exclPanel.className = 'bt-excl-panel';
+        uiRefs.exclPanel = exclPanel;
+
+        const exclForm = document.createElement('div');
+        exclForm.className = 'bt-excl-form';
+        const exclInput = document.createElement('input');
+        exclInput.type = 'text';
+        exclInput.className = 'bt-input';
+        exclInput.placeholder = 'example.com или URL';
+        exclInput.spellcheck = false;
+        exclInput.autocomplete = 'off';
+        const exclAddBtn = document.createElement('button');
+        exclAddBtn.type = 'button';
+        exclAddBtn.className = 'bt-btn bt-btn-sm';
+        exclAddBtn.textContent = 'Добавить';
+
+        const submitExclInput = () => {
+            const res = addExcludedHost(exclInput.value, true);
+            if (res.ok) exclInput.value = '';
+        };
+        exclAddBtn.addEventListener('click', submitExclInput);
+        exclInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
+                submitExclInput();
+                return;
+            }
+            if (e.key === 'Escape' || e.key === 'F2') return;
+            e.stopPropagation();
+        });
+        exclInput.addEventListener('keypress', e => e.stopPropagation());
+        exclInput.addEventListener('keyup', e => e.stopPropagation());
+
+        exclForm.append(exclInput, exclAddBtn);
+        exclPanel.appendChild(exclForm);
+        uiRefs.exclInput = exclInput;
+
+        const exclList = document.createElement('div');
+        exclList.className = 'bt-excl-list';
+        uiRefs.exclList = exclList;
+        exclPanel.appendChild(exclList);
+
+        const exclClearBtn = document.createElement('button');
+        exclClearBtn.type = 'button';
+        exclClearBtn.className = 'bt-btn bt-btn-sm bt-btn-danger';
+        exclClearBtn.textContent = 'Очистить весь список';
+        exclClearBtn.addEventListener('click', () => clearExcludedHosts(true));
+        uiRefs.exclClearBtn = exclClearBtn;
+        exclPanel.appendChild(exclClearBtn);
+
+        exclToggleBtn.addEventListener('click', () => {
+            const isOpen = exclPanel.classList.toggle('open');
+            exclToggleBtn.setAttribute('aria-expanded', String(isOpen));
+            clampPanelPosition();
+        });
+        fontCard.appendChild(exclPanel);
+
         const fontNote = document.createElement('div');
         fontNote.className = 'bt-note';
         uiRefs.fontNote = fontNote;
         fontCard.appendChild(fontNote);
         body.appendChild(fontCard);
+
+        // Карточка резервного копирования настроек (JSON)
+        const backupCard = document.createElement('div');
+        backupCard.className = 'bt-card';
+
+        const backupTitle = document.createElement('div');
+        backupTitle.className = 'bt-card-title';
+        backupTitle.textContent = 'Резервная копия настроек';
+        backupCard.appendChild(backupTitle);
+
+        const backupRow = document.createElement('div');
+        backupRow.className = 'bt-backup-row';
+
+        const exportJsonBtn = document.createElement('button');
+        exportJsonBtn.type = 'button';
+        exportJsonBtn.className = 'bt-btn bt-btn-sm';
+        exportJsonBtn.dataset.action = 'export-json';
+        exportJsonBtn.textContent = 'Экспорт JSON';
+        exportJsonBtn.addEventListener('click', () => exportSettingsToJsonFile(true));
+
+        const importFileInput = createImportFileInput();
+
+        const importJsonBtn = document.createElement('button');
+        importJsonBtn.type = 'button';
+        importJsonBtn.className = 'bt-btn bt-btn-sm';
+        importJsonBtn.dataset.action = 'import-json';
+        importJsonBtn.textContent = 'Импорт JSON';
+        importJsonBtn.addEventListener('click', () => importFileInput.click());
+
+        uiRefs.exportJsonBtn = exportJsonBtn;
+        uiRefs.importJsonBtn = importJsonBtn;
+        uiRefs.importFileInput = importFileInput;
+
+        backupRow.append(exportJsonBtn, importJsonBtn);
+        backupCard.append(backupRow, importFileInput);
+
+        const backupNote = document.createElement('div');
+        backupNote.className = 'bt-note';
+        backupNote.textContent = 'Сохраняет и восстанавливает все параметры шрифта, исключения сайтов и настройки YouTube.';
+        backupCard.appendChild(backupNote);
+        body.appendChild(backupCard);
 
         // Кнопки управления панелью
         const actions = document.createElement('div');
@@ -1661,6 +2275,8 @@
             return;
         }
         if (e.key === 'Escape' && panelEl && panelEl.classList.contains('open')) {
+            e.preventDefault();
+            e.stopPropagation();
             closePanel();
         }
     }, true);
@@ -1674,6 +2290,8 @@
             GM_registerMenuCommand('Открыть / закрыть панель настроек (F2)', () => togglePanel());
             GM_registerMenuCommand('Вкл / выкл кастомный шрифт полностью (Alt+Shift+F)', () => toggleGlobalFontEnabled(true));
             GM_registerMenuCommand('Исключить / вернуть текущий сайт (Alt+Shift+U)', () => toggleFontExclusion(true));
+            GM_registerMenuCommand('Экспорт настроек в JSON', () => exportSettingsToJsonFile(true));
+            GM_registerMenuCommand('Импорт настроек из JSON', () => openSettingsImportPicker());
         } catch (_) {}
     }
 
@@ -1696,6 +2314,10 @@
                 if (newV === 'soft' || newV === 'strong') fontIntensity = newV;
                 applyGlobalFont();
                 syncFontUI();
+            });
+            GM_addValueChangeListener(PANEL_POS_KEY, (_k, _oldV, newV, remote) => {
+                if (!remote) return;
+                applyPanelSavedPosition(newV);
             });
             if (isYouTube) {
                 GM_addValueChangeListener(YT_SETTINGS_KEY, (_k, _oldV, newV, remote) => {
