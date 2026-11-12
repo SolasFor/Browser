@@ -1,170 +1,653 @@
 // ==UserScript==
 // @name         Browser Tweaks — Ubuntu Light + YouTube
 // @namespace    https://github.com/SolasFor/Browser
-// @version      1.0.2
-// @description  Глобальный Ubuntu Light и набор настроек YouTube в одной панели
+// @version      1.1.0
+// @description  Глобальный шрифт Ubuntu Light и модульные инструменты YouTube в единой изолированной панели
 // @author       SolasFor
 // @homepageURL  https://github.com/SolasFor/Browser
 // @supportURL   https://github.com/SolasFor/Browser/issues
 // @updateURL    https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js
 // @downloadURL  https://raw.githubusercontent.com/SolasFor/Browser/main/userscripts/browser-tweaks-unified.user.js
+// @resource     ubuntuFont https://raw.githubusercontent.com/SolasFor/Browser/main/fonts/Ubuntu%20Light.woff2
 // @match        *://*/*
 // @grant        GM_addStyle
 // @grant        GM_getValue
 // @grant        GM_setValue
+// @grant        GM_addValueChangeListener
+// @grant        GM_registerMenuCommand
+// @grant        GM_getResourceURL
 // @grant        GM_xmlhttpRequest
+// @grant        unsafeWindow
 // @connect      translate.googleapis.com
 // @run-at       document-start
 // ==/UserScript==
 
-(function() {
-
+(function () {
     'use strict';
 
-    // Глобальный модуль Ubuntu Light — работает на всех сайтах.
+    // ==========================================
+    // 0. КОНСТАНТЫ, СРЕДА И МЕНЕДЖЕР СТИЛЕЙ
+    // ==========================================
+
     const FONT_URL = 'https://raw.githubusercontent.com/SolasFor/Browser/main/fonts/Ubuntu%20Light.woff2';
     const FONT_EXCLUDED_KEY = 'unifiedUbuntuLightExcludedHosts';
     const FONT_INTENSITY_KEY = 'unifiedUbuntuLightIntensity';
-    const host = location.hostname.toLowerCase();
-    const isYouTube = /(^|\.)youtube\.com$/i.test(host);
-    const getExcludedHosts = () => {
-        try { const v = GM_getValue(FONT_EXCLUDED_KEY, []); return Array.isArray(v) ? v : []; }
-        catch (_) { return []; }
+
+    const YT_SETTINGS_KEY = 'bt_youtube_settings';
+    const YT_QUALITY_KEY = 'bt_youtube_quality';
+    const YT_SPEED_STEP_KEY = 'bt_youtube_speed_step';
+    const PANEL_POS_KEY = 'bt_panel_position';
+    const TRANSLATION_CACHE_KEY = 'bt_translation_cache';
+    const MIGRATION_KEY = 'bt_migrated_v110';
+
+    // Ключи прошлых версий (localStorage) для автоматической миграции
+    const LEGACY_KEYS = {
+        settings: 'retube_clone_settings',
+        pos: 'retube_clone_position',
+        quality: 'retube_clone_quality',
+        speedStep: 'retube_clone_speed_step',
+        cache: 'retube_clone_translation_cache'
     };
-    const matchesHost = excludedHost => host === excludedHost || host.endsWith('.' + excludedHost);
-    const isFontExcluded = () => getExcludedHosts().some(matchesHost);
-    let fontIntensity = 'strong';
-    try { const v = GM_getValue(FONT_INTENSITY_KEY, 'strong'); if (['soft','strong'].includes(v)) fontIntensity = v; } catch (_) {}
-    let fontStyleHandle = null;
-    let excludeBtn = null;
-    const syncExcludeButton = () => {
-        if (excludeBtn) excludeBtn.textContent = isFontExcluded() ? 'Включить на этом сайте' : 'Исключить этот сайт';
-    };
-    GM_addStyle(`@font-face { font-family:"Ubuntu Light Custom"; src:url("${FONT_URL}") format("woff2"); font-weight:100 500; font-style:normal; font-display:swap; }`);
-    function toggleFontExclusion() {
-        const excluded = isFontExcluded();
-        const hosts = getExcludedHosts();
-        const next = excluded ? hosts.filter(x => !matchesHost(x)) : [...hosts, host];
-        try { GM_setValue(FONT_EXCLUDED_KEY, [...new Set(next)]); } catch (_) {}
-        const nowExcluded = isFontExcluded();
-        if (nowExcluded) {
-            if (fontStyleHandle && typeof fontStyleHandle.remove === 'function') fontStyleHandle.remove();
-            fontStyleHandle = null;
-        } else applyGlobalFont();
-        syncExcludeButton();
-        return nowExcluded;
+
+    const host = (location.hostname || '').toLowerCase();
+    const isTopWindow = (() => {
+        try { return window.top === window.self; } catch (_) { return false; }
+    })();
+    const isYouTube = /(^|\.)youtube\.com$/i.test(host) && !/^\/embed\b/i.test(location.pathname || '');
+
+    const managedStyles = new Map();
+
+    function setManagedStyle(id, cssText) {
+        removeManagedStyle(id);
+        if (!cssText) return;
+        let handle = null;
+        try {
+            if (typeof GM_addStyle === 'function') handle = GM_addStyle(cssText);
+        } catch (_) {}
+        if (!handle) {
+            const styleEl = document.createElement('style');
+            styleEl.textContent = cssText;
+            (document.head || document.documentElement).appendChild(styleEl);
+            handle = styleEl;
+        }
+        if (handle && handle.dataset) handle.dataset.btStyle = id;
+        managedStyles.set(id, handle);
     }
-    function applyGlobalFont() {
-        if (fontStyleHandle && typeof fontStyleHandle.remove === 'function') fontStyleHandle.remove();
-        fontStyleHandle = null;
-        if (isFontExcluded()) return;
-        const weight = fontIntensity === 'strong' ? '300' : '350';
-        const css = `
-            body, body :is(p,span,div,a,li,td,th,label,button,input,textarea,select,h1,h2,h3,h4,h5,h6,blockquote,figcaption,summary,legend,small,strong,em) {
-                font-family:"Ubuntu Light Custom","Ubuntu",sans-serif !important;
-                font-weight:${weight} !important;
+
+    function removeManagedStyle(id) {
+        const handle = managedStyles.get(id);
+        if (handle) {
+            if (typeof handle.remove === 'function') handle.remove();
+            else if (handle.parentNode) handle.parentNode.removeChild(handle);
+            managedStyles.delete(id);
+        }
+        document.querySelectorAll(`style[data-bt-style="${id}"]`).forEach(el => el.remove());
+    }
+
+    function gmGet(key, fallback) {
+        try {
+            if (typeof GM_getValue === 'function') {
+                const val = GM_getValue(key, fallback);
+                return val === undefined ? fallback : val;
             }
-            body :is(b,strong, h1,h2,h3,h4,h5,h6) { font-weight:${fontIntensity === 'strong' ? '400' : '500'} !important; }
-            body :is(svg,svg *,code,pre,kbd,samp,[role="img"],[class*="icon" i],[class*="material" i],[class*="glyph" i],[class*="fa-" i]) {
-                font-family:initial !important;
-            }`;
-        fontStyleHandle = GM_addStyle(css);
+        } catch (_) {}
+        return fallback;
     }
+
+    function gmSet(key, value) {
+        try {
+            if (typeof GM_setValue === 'function') GM_setValue(key, value);
+        } catch (_) {}
+    }
+
+    // ==========================================
+    // 1. ГЛОБАЛЬНЫЙ МОДУЛЬ ШРИФТА UBUNTU LIGHT
+    // ==========================================
+
+    function resolveFontSource() {
+        try {
+            if (typeof GM_getResourceURL === 'function') {
+                const cachedUrl = GM_getResourceURL('ubuntuFont', false);
+                if (cachedUrl && typeof cachedUrl === 'string') {
+                    return `url("${cachedUrl}") format("woff2"), url("${FONT_URL}") format("woff2")`;
+                }
+            }
+        } catch (_) {}
+        return `url("${FONT_URL}") format("woff2")`;
+    }
+
+    setManagedStyle('font-face', `
+        @font-face {
+            font-family: "Ubuntu Light Custom";
+            src: ${resolveFontSource()};
+            font-weight: 100 500;
+            font-style: normal;
+            font-display: swap;
+        }
+    `);
+
+    const getExcludedHosts = () => {
+        const list = gmGet(FONT_EXCLUDED_KEY, []);
+        return Array.isArray(list) ? list : [];
+    };
+    const matchesHost = excludedHost => Boolean(excludedHost) && (host === excludedHost || host.endsWith('.' + excludedHost));
+    const isFontExcluded = () => !host || getExcludedHosts().some(matchesHost);
+
+    let fontIntensity = 'strong';
+    {
+        const savedIntensity = gmGet(FONT_INTENSITY_KEY, 'strong');
+        if (savedIntensity === 'soft' || savedIntensity === 'strong') fontIntensity = savedIntensity;
+    }
+
+    const PROTECTED_FONT_SELECTOR = [
+        'svg', 'svg *',
+        'code', 'code *', 'pre', 'pre *', 'kbd', 'kbd *', 'samp', 'samp *', 'var', 'tt',
+        '.monaco-editor', '.monaco-editor *', '.cm-editor', '.cm-editor *',
+        '.ace_editor', '.ace_editor *', '.CodeMirror', '.CodeMirror *',
+        '[role="img"]', '[data-icon]',
+        '[class*="icon" i]', '[class*="material" i]', '[class*="glyph" i]',
+        '[class*="fa-" i]', '[class*="bi-" i]', '[class*="ri-" i]',
+        '[class*="bx-" i]', '[class*="lucide" i]', '[class*="codicon" i]', '[class*="octicon" i]'
+    ].join(', ');
+
+    function applyGlobalFont() {
+        if (isFontExcluded()) {
+            removeManagedStyle('global-font');
+            return;
+        }
+        const textWeight = fontIntensity === 'strong' ? '300' : '350';
+        const boldWeight = fontIntensity === 'strong' ? '400' : '500';
+        setManagedStyle('global-font', `
+            body,
+            body :is(p, span, div, a, li, td, th, label, button, input, textarea, select, h1, h2, h3, h4, h5, h6, blockquote, figcaption, summary, legend, small, strong, em, b, i):not(${PROTECTED_FONT_SELECTOR}) {
+                font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif !important;
+                font-weight: ${textWeight} !important;
+            }
+            body :is(b, strong, h1, h2, h3, h4, h5, h6):not(${PROTECTED_FONT_SELECTOR}) {
+                font-weight: ${boldWeight} !important;
+            }
+        `);
+    }
+
     applyGlobalFont();
 
-    function addFontControls(panel, selectStyle, buttonStyle) {
-        const section = document.createElement('div');
-        section.style.cssText = 'margin:10px 8px 8px;padding:9px 8px;border:1px solid rgba(150,165,195,.2);border-radius:9px;background:rgba(100,110,135,.10)';
-        const heading = document.createElement('div');
-        heading.textContent = 'Глобальный шрифт Ubuntu Light';
-        heading.style.cssText = 'font-size:14px;font-weight:600;color:#e0e5ef;margin:0 0 8px 0';
-        section.appendChild(heading);
-
-        const intensityRow = document.createElement('div');
-        intensityRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:8px';
-        const intensityLabel = document.createElement('span');
-        intensityLabel.textContent = 'Интенсивность:';
-        intensityLabel.style.cssText = 'font-size:13px;color:#c9d0d3';
-        const select = document.createElement('select');
-        select.style.cssText = selectStyle || 'flex:1;padding:5px;background:#30333d;color:#e0e5ef;border:1px solid #555b6b;border-radius:5px';
-        [['soft','Мягкая'],['strong','Выраженная']].forEach(([v,t]) => {
-            const option = document.createElement('option'); option.value=v; option.textContent=t; option.selected=fontIntensity===v; select.appendChild(option);
-        });
-        select.addEventListener('change', () => {
-            fontIntensity = select.value;
-            try { GM_setValue(FONT_INTENSITY_KEY, fontIntensity); } catch (_) {}
-            applyGlobalFont();
-        });
-        intensityRow.append(intensityLabel, select); section.appendChild(intensityRow);
-
-        const exclude = document.createElement('button');
-        excludeBtn = exclude;
-        exclude.type = 'button';
-        syncExcludeButton();
-        exclude.style.cssText = buttonStyle || 'width:100%;padding:7px;background:rgba(96,100,110,.37);color:#dce1e8;border:1px solid #555b6b;border-radius:5px;cursor:pointer';
-        exclude.addEventListener('click', () => {
-            toggleFontExclusion();
-        });
-        section.appendChild(exclude);
-        const note = document.createElement('div');
-        note.textContent = 'Настройки применяются ко всем сайтам. Для быстрого переключения: Alt + Shift + U.';
-        note.style.cssText = 'font-size:11px;line-height:1.4;color:#9da6b5;margin-top:7px';
-        section.appendChild(note);
-        panel.appendChild(section);
-    }
-
-    function createGlobalFontPanel() {
-        if (!document.body || document.getElementById('retube-settings-panel')) return;
-        const panel = document.createElement('div');
-        panel.id = 'retube-settings-panel';
-        panel.style.cssText = 'position:fixed;z-index:2147483646;right:22px;top:80px;width:320px;padding:12px;background:rgba(30,32,40,.94);color:#fff;border:1px solid rgba(160,175,205,.3);border-radius:12px;font:300 14px/1.4 system-ui,sans-serif;box-shadow:0 12px 36px rgba(0,0,0,.35);backdrop-filter:blur(14px);display:none';
-        const title = document.createElement('div'); title.textContent='Browser Tweaks'; title.style.cssText='font-size:18px;font-weight:600;margin:0 0 8px';
-        panel.appendChild(title);
-        addFontControls(panel);
-        const close = document.createElement('button'); close.textContent='Закрыть'; close.style.cssText='width:100%;margin-top:8px;padding:7px;background:#454b59;color:#fff;border:0;border-radius:5px;cursor:pointer';
-        close.addEventListener('click',()=>panel.style.display='none'); panel.appendChild(close);
-        document.body.appendChild(panel);
-        window.addEventListener('keydown', e => {
-            if (e.key === 'F2') { e.preventDefault(); panel.style.display = panel.style.display === 'none' ? 'block' : 'none'; }
-            if (e.key === 'Escape') panel.style.display='none';
-        });
-    }
-    window.addEventListener('keydown', e => {
-        if (!(e.altKey && e.shiftKey && e.code === 'KeyU') || e.repeat || e.ctrlKey || e.metaKey) return;
-        e.preventDefault();
-        toggleFontExclusion();
-    }, true);
-
-    if (!isYouTube) {
-        const mount = () => createGlobalFontPanel();
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount, {once:true});
-        else mount();
+    // Во вложенных фреймах применяем только шрифт и слушаем его синхронизацию между вкладками,
+    // не создавая дубликатов панелей F2, хоткеев и наблюдателей YouTube.
+    if (!isTopWindow) {
+        if (typeof GM_addValueChangeListener === 'function') {
+            try {
+                GM_addValueChangeListener(FONT_EXCLUDED_KEY, () => applyGlobalFont());
+                GM_addValueChangeListener(FONT_INTENSITY_KEY, (_k, _oldV, newV) => {
+                    if (newV === 'soft' || newV === 'strong') fontIntensity = newV;
+                    applyGlobalFont();
+                });
+            } catch (_) {}
+        }
         return;
     }
 
     // ==========================================
-    // 0. ХРАНИЛИЩЕ СТИЛЕЙ И СОСТОЯНИЯ
+    // 2. ОБЩИЙ SHADOW DOM ХОСТ (OSD + ПАНЕЛЬ F2)
     // ==========================================
 
-    const activeStyles = {
-        smoothAnim: [],
-        hideElements: [],
-        wheelSpeed: [],
-        translateComments: [],
-        compactMode: [],
-        autoQuality: [],
-        speedHotkeys: []
-    };
+    let uiHost = null;
+    let shadow = null;
+    let osdEl = null;
+    let osdTimer = null;
+    let tooltipEl = null;
+    let tooltipTimer = null;
+    let panelEl = null;
+    let uiRefs = null;
 
-    const STORAGE_KEY = 'retube_clone_settings';
-    const POS_KEY = 'retube_clone_position';
-    const QUALITY_KEY = 'retube_clone_quality';
-    const SPEED_STEP_KEY = 'retube_clone_speed_step';
-    const TRANSLATION_CACHE_KEY = 'retube_clone_translation_cache';
+    const SHADOW_CSS = `
+        :host {
+            all: initial;
+        }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
+        .bt-osd {
+            position: fixed;
+            top: 76px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-6px);
+            z-index: 2147483647;
+            background: rgba(24, 27, 38, 0.9);
+            color: #eef2f9;
+            padding: 9px 18px;
+            border-radius: 9px;
+            border: 1px solid rgba(155, 172, 205, 0.25);
+            font: 300 14px/1.35 "Ubuntu Light Custom", "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+            letter-spacing: 0.01em;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s ease, transform 0.2s ease;
+            white-space: nowrap;
+        }
+        .bt-osd.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .bt-osd[data-tone="on"] {
+            border-color: rgba(92, 196, 138, 0.45);
+        }
+        .bt-osd[data-tone="off"] {
+            border-color: rgba(220, 110, 110, 0.45);
+        }
+        .bt-tooltip {
+            position: fixed;
+            z-index: 2147483647;
+            max-width: 340px;
+            padding: 10px 13px;
+            background: rgba(40, 46, 58, 0.92);
+            color: #f0f4fa;
+            border: 1px solid rgba(160, 175, 205, 0.24);
+            border-radius: 10px;
+            font: 300 13px/1.45 "Ubuntu Light Custom", "Ubuntu", system-ui, sans-serif;
+            white-space: pre-line;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.42);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            pointer-events: none;
+            opacity: 0;
+            transform: translateY(-4px);
+            transition: opacity 0.18s ease, transform 0.18s ease;
+            visibility: hidden;
+        }
+        .bt-tooltip.visible {
+            opacity: 1;
+            transform: translateY(0);
+            visibility: visible;
+        }
+        .bt-panel {
+            position: fixed;
+            z-index: 2147483646;
+            width: 334px;
+            max-width: calc(100vw - 16px);
+            max-height: calc(100vh - 16px);
+            display: none;
+            flex-direction: column;
+            background: rgba(26, 29, 38, 0.86);
+            color: #e6ebf4;
+            border: 1px solid rgba(160, 175, 205, 0.26);
+            border-radius: 14px;
+            font: 300 13.5px/1.4 "Ubuntu Light Custom", "Ubuntu", system-ui, -apple-system, "Segoe UI", sans-serif;
+            box-shadow: 0 14px 40px rgba(0, 0, 0, 0.42);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            overflow: hidden;
+            pointer-events: auto;
+        }
+        .bt-panel.open {
+            display: flex;
+            animation: btFadeIn 0.18s ease;
+        }
+        @keyframes btFadeIn {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .bt-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 14px;
+            background: rgba(67, 77, 105, 0.3);
+            border-bottom: 1px solid rgba(160, 175, 205, 0.14);
+            cursor: grab;
+            user-select: none;
+        }
+        .bt-header:active {
+            cursor: grabbing;
+        }
+        .bt-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #eef2f9;
+        }
+        .bt-grip {
+            font-size: 14px;
+            letter-spacing: -1px;
+            color: rgba(205, 214, 228, 0.5);
+        }
+        .bt-body {
+            padding: 10px 10px 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .bt-row-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 5px 8px;
+            border-radius: 7px;
+            cursor: pointer;
+            color: #d4dce7;
+            user-select: none;
+            transition: background 0.15s ease;
+        }
+        .bt-row-check:hover {
+            background: rgba(130, 142, 168, 0.15);
+        }
+        .bt-row-check input[type="checkbox"] {
+            width: 15px;
+            height: 15px;
+            margin: 0;
+            accent-color: #8da2cb;
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+        .bt-row-with-expand {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+        }
+        .bt-row-with-expand .bt-row-check {
+            flex: 1;
+            min-width: 0;
+        }
+        .bt-expand-btn {
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border: 1px solid rgba(150, 165, 195, 0.2);
+            border-radius: 6px;
+            background: rgba(96, 104, 122, 0.25);
+            color: #cdd6e4;
+            font-size: 12px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.15s ease, transform 0.15s ease;
+        }
+        .bt-expand-btn:hover {
+            background: rgba(120, 132, 156, 0.4);
+        }
+        .bt-expand-btn[aria-expanded="true"] {
+            transform: rotate(180deg);
+        }
+        .bt-sublist {
+            display: none;
+            flex-direction: column;
+            gap: 2px;
+            margin: 2px 4px 4px 16px;
+            padding: 5px 6px;
+            border-left: 2px solid rgba(140, 160, 200, 0.28);
+            background: rgba(70, 78, 98, 0.14);
+            border-radius: 0 7px 7px 0;
+        }
+        .bt-sublist.open {
+            display: flex;
+        }
+        .bt-sublist.muted {
+            opacity: 0.52;
+        }
+        .bt-sublist .bt-row-check {
+            font-size: 12.5px;
+            padding: 4px 6px;
+        }
+        .bt-select-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 4px 8px;
+        }
+        .bt-select-label {
+            font-size: 13px;
+            color: #c9d2df;
+            white-space: nowrap;
+        }
+        .bt-select {
+            flex: 1;
+            min-width: 0;
+            padding: 5px 8px;
+            background: rgba(62, 67, 82, 0.72);
+            color: #e6ebf4;
+            border: 1px solid rgba(135, 148, 175, 0.35);
+            border-radius: 6px;
+            font: inherit;
+            font-size: 12.5px;
+            cursor: pointer;
+            outline: none;
+        }
+        .bt-select option {
+            background: #232631;
+            color: #e6ebf4;
+        }
+        .bt-card {
+            margin-top: 6px;
+            padding: 9px 10px;
+            border: 1px solid rgba(150, 165, 195, 0.2);
+            border-radius: 9px;
+            background: rgba(90, 100, 125, 0.12);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .bt-card-title {
+            font-size: 13.5px;
+            font-weight: 500;
+            color: #e6ebf4;
+        }
+        .bt-note {
+            font-size: 11.5px;
+            line-height: 1.4;
+            color: #9ba5b7;
+        }
+        .bt-btn {
+            padding: 7px 10px;
+            background: rgba(92, 98, 114, 0.42);
+            color: #e4eaf3;
+            border: 1px solid rgba(135, 148, 175, 0.32);
+            border-radius: 6px;
+            font: inherit;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }
+        .bt-btn:hover {
+            background: rgba(112, 120, 140, 0.62);
+        }
+        .bt-btn-danger {
+            background: rgba(135, 75, 75, 0.34);
+            border-color: rgba(175, 105, 105, 0.45);
+            color: #f0dede;
+        }
+        .bt-btn-danger:hover {
+            background: rgba(160, 88, 88, 0.52);
+        }
+        .bt-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .bt-actions .bt-btn {
+            flex: 1;
+        }
+    `;
 
-    let settings = {
+    function ensureShadowHost() {
+        if (shadow && uiHost && uiHost.isConnected) return shadow;
+        const mountTarget = document.body || document.documentElement;
+        if (!mountTarget) return null;
+
+        if (!uiHost) {
+            uiHost = document.createElement('div');
+            uiHost.id = 'browser-tweaks-root';
+            uiHost.style.cssText = 'all:initial;position:fixed;top:0;left:0;width:0;height:0;z-index:2147483646;pointer-events:none;';
+            shadow = uiHost.attachShadow({ mode: 'open' });
+            const style = document.createElement('style');
+            style.textContent = SHADOW_CSS;
+            shadow.appendChild(style);
+        }
+        if (!uiHost.isConnected) mountTarget.appendChild(uiHost);
+        return shadow;
+    }
+
+    function showOSD(message, tone) {
+        const root = ensureShadowHost();
+        if (!root) return;
+        if (!osdEl) {
+            osdEl = document.createElement('div');
+            osdEl.className = 'bt-osd';
+            osdEl.setAttribute('role', 'status');
+            root.appendChild(osdEl);
+        }
+        osdEl.textContent = message;
+        if (tone) osdEl.dataset.tone = tone;
+        else delete osdEl.dataset.tone;
+        osdEl.classList.add('visible');
+        clearTimeout(osdTimer);
+        osdTimer = setTimeout(() => {
+            if (osdEl) osdEl.classList.remove('visible');
+        }, 1600);
+    }
+
+    function showTooltip(text, cursorX, cursorY) {
+        const root = ensureShadowHost();
+        if (!root || !text) return;
+        if (!tooltipEl) {
+            tooltipEl = document.createElement('div');
+            tooltipEl.className = 'bt-tooltip';
+            root.appendChild(tooltipEl);
+        }
+        tooltipEl.textContent = text;
+        tooltipEl.classList.remove('visible');
+        tooltipEl.style.left = '0px';
+        tooltipEl.style.top = '0px';
+
+        const rect = tooltipEl.getBoundingClientRect();
+        const margin = 14;
+        let left = cursorX - rect.width / 2;
+        let top = cursorY + margin;
+        if (left < 8) left = 8;
+        if (left + rect.width > window.innerWidth - 8) left = window.innerWidth - rect.width - 8;
+        if (top + rect.height > window.innerHeight - 8) top = Math.max(8, cursorY - rect.height - margin);
+
+        tooltipEl.style.left = Math.round(left) + 'px';
+        tooltipEl.style.top = Math.round(top) + 'px';
+        requestAnimationFrame(() => {
+            if (tooltipEl) tooltipEl.classList.add('visible');
+        });
+    }
+
+    function hideTooltip() {
+        if (tooltipTimer) {
+            clearTimeout(tooltipTimer);
+            tooltipTimer = null;
+        }
+        if (tooltipEl) tooltipEl.classList.remove('visible');
+    }
+
+    function syncFontUI() {
+        if (!uiRefs) return;
+        const excluded = isFontExcluded();
+        if (uiRefs.excludeBtn) {
+            uiRefs.excludeBtn.textContent = excluded ? 'Включить на этом сайте' : 'Исключить этот сайт';
+        }
+        if (uiRefs.intensitySelect) {
+            uiRefs.intensitySelect.value = fontIntensity;
+        }
+    }
+
+    function toggleFontExclusion(showFeedback = true) {
+        if (!host) return true;
+        const excluded = isFontExcluded();
+        const hosts = getExcludedHosts();
+        const next = excluded ? hosts.filter(x => !matchesHost(x)) : [...hosts, host];
+        gmSet(FONT_EXCLUDED_KEY, [...new Set(next)]);
+        const nowExcluded = isFontExcluded();
+        applyGlobalFont();
+        syncFontUI();
+        if (showFeedback) {
+            showOSD(
+                nowExcluded ? `Ubuntu Light: выключен для ${host}` : `Ubuntu Light: включён для ${host}`,
+                nowExcluded ? 'off' : 'on'
+            );
+        }
+        return nowExcluded;
+    }
+
+    function clampPanelPosition() {
+        if (!panelEl || !panelEl.classList.contains('open')) return;
+        const rect = panelEl.getBoundingClientRect();
+        const width = rect.width || 334;
+        const height = rect.height || 260;
+        const maxLeft = Math.max(8, window.innerWidth - width - 8);
+        const maxTop = Math.max(8, window.innerHeight - height - 8);
+        const currentLeft = Number.parseFloat(panelEl.style.left);
+        const currentTop = Number.parseFloat(panelEl.style.top);
+        const clampedLeft = Math.min(maxLeft, Math.max(8, Number.isFinite(currentLeft) ? currentLeft : maxLeft - 14));
+        const clampedTop = Math.min(maxTop, Math.max(8, Number.isFinite(currentTop) ? currentTop : 72));
+        panelEl.style.left = Math.round(clampedLeft) + 'px';
+        panelEl.style.top = Math.round(clampedTop) + 'px';
+        panelEl.style.right = 'auto';
+    }
+
+    function makeDraggable(panel, handle) {
+        let dragState = null;
+
+        function onMove(e) {
+            if (!dragState) return;
+            const maxLeft = Math.max(8, window.innerWidth - panel.offsetWidth - 8);
+            const maxTop = Math.max(8, window.innerHeight - panel.offsetHeight - 8);
+            const left = Math.min(maxLeft, Math.max(8, e.clientX - dragState.offsetX));
+            const top = Math.min(maxTop, Math.max(8, e.clientY - dragState.offsetY));
+            panel.style.left = Math.round(left) + 'px';
+            panel.style.top = Math.round(top) + 'px';
+            panel.style.right = 'auto';
+        }
+
+        function onUp() {
+            if (dragState) {
+                gmSet(PANEL_POS_KEY, {
+                    left: Number.parseFloat(panel.style.left) || 24,
+                    top: Number.parseFloat(panel.style.top) || 72
+                });
+            }
+            dragState = null;
+            window.removeEventListener('mousemove', onMove, true);
+            window.removeEventListener('mouseup', onUp, true);
+        }
+
+        handle.addEventListener('mousedown', e => {
+            if (e.button !== 0) return;
+            e.preventDefault();
+            const rect = panel.getBoundingClientRect();
+            dragState = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
+            window.addEventListener('mousemove', onMove, true);
+            window.addEventListener('mouseup', onUp, true);
+        });
+    }
+
+    // ==========================================
+    // 3. СОСТОЯНИЕ И МИГРАЦИЯ НАСТРОЕК YOUTUBE
+    // ==========================================
+
+    const HIDE_SUBKEYS = [
+        ['hidePlayerClutter', 'Элементы и оверлеи плеера'],
+        ['hideActionButtons', 'Кнопки под видео (Поделиться, Клип…)'],
+        ['hideSidebarExtras', 'Лишние разделы бокового меню'],
+        ['hideHeaderExtras', 'Голосовой поиск и код страны'],
+        ['hidePromosAndShorts', 'Промо Premium, опросы и полки Shorts']
+    ];
+
+    const DEFAULT_YT_SETTINGS = {
         smoothAnim: false,
         hideElements: false,
+        hidePlayerClutter: true,
+        hideActionButtons: true,
+        hideSidebarExtras: true,
+        hideHeaderExtras: true,
+        hidePromosAndShorts: true,
         wheelSpeed: false,
         translateComments: false,
         compactMode: false,
@@ -172,108 +655,204 @@
         speedHotkeys: false
     };
 
+    const QUALITY_MAP = {
+        hd720: 'HD (720p)',
+        hd1080: 'FHD (1080p)',
+        hd1440: '2K (1440p)',
+        hd2160: '4K (2160p)'
+    };
+
+    const TOOLTIPS = {
+        smoothAnim: 'Добавляет плавные переходы прозрачности и цвета для контейнеров YouTube без рывков геометрии.',
+        hideElements: 'Скрывает выбранные группы лишних элементов интерфейса и плеера.\nНажмите кнопку «▾» справа, чтобы настроить отдельные категории.',
+        wheelSpeed: 'Позволяет менять скорость воспроизведения видео прокруткой колеса мыши над плеером при зажатом Shift.',
+        translateComments: 'Добавляет кнопку «Перевести» под комментариями на иностранных языках (Google Translate с кэшем).',
+        compactMode: 'Уменьшает отступы сетки видео, комментариев и высоту верхней шапки YouTube.',
+        autoQuality: 'Автоматически выбирает заданное качество (или ближайшее доступное) при открытии каждого ролика.',
+        speedHotkeys: 'Горячие клавиши во время просмотра ролика:\n• Ctrl + ↑ — ускорить\n• Ctrl + ↓ — замедлить\n• Ctrl + 0 — вернуть 1.00×'
+    };
+
+    let ytSettings = Object.assign({}, DEFAULT_YT_SETTINGS);
     let selectedQuality = 'hd1080';
     let speedStep = 0.25;
-    try { const savedStep = Number(localStorage.getItem(SPEED_STEP_KEY)); if ([0.05, 0.1, 0.25, 0.5].includes(savedStep)) speedStep = savedStep; } catch (e) {}
-    try {
-        const savedQuality = localStorage.getItem(QUALITY_KEY);
-        if (savedQuality) selectedQuality = savedQuality;
-    } catch (e) {}
 
-    try {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) settings = Object.assign(settings, JSON.parse(saved));
-    } catch (e) {
-        console.warn('YouTube Tweaks: не удалось загрузить настройки', e);
+    function migrateLegacyYouTubeStorage() {
+        if (!isYouTube || gmGet(MIGRATION_KEY, false)) return;
+        try {
+            const rawSettings = localStorage.getItem(LEGACY_KEYS.settings);
+            if (rawSettings && gmGet(YT_SETTINGS_KEY, null) === null) {
+                gmSet(YT_SETTINGS_KEY, Object.assign({}, DEFAULT_YT_SETTINGS, JSON.parse(rawSettings)));
+            }
+            const rawQuality = localStorage.getItem(LEGACY_KEYS.quality);
+            if (rawQuality && QUALITY_MAP[rawQuality] && gmGet(YT_QUALITY_KEY, null) === null) {
+                gmSet(YT_QUALITY_KEY, rawQuality);
+            }
+            const rawStep = Number(localStorage.getItem(LEGACY_KEYS.speedStep));
+            if ([0.05, 0.1, 0.25, 0.5].includes(rawStep) && gmGet(YT_SPEED_STEP_KEY, null) === null) {
+                gmSet(YT_SPEED_STEP_KEY, rawStep);
+            }
+            const rawPos = localStorage.getItem(LEGACY_KEYS.pos);
+            if (rawPos && gmGet(PANEL_POS_KEY, null) === null) {
+                const parsedPos = JSON.parse(rawPos);
+                const left = Number.parseFloat(parsedPos && parsedPos.left);
+                const top = Number.parseFloat(parsedPos && parsedPos.top);
+                if (Number.isFinite(left) && Number.isFinite(top)) gmSet(PANEL_POS_KEY, { left, top });
+            }
+            const rawCache = localStorage.getItem(LEGACY_KEYS.cache);
+            if (rawCache && gmGet(TRANSLATION_CACHE_KEY, null) === null) {
+                const parsedCache = JSON.parse(rawCache);
+                if (parsedCache && typeof parsedCache === 'object') gmSet(TRANSLATION_CACHE_KEY, parsedCache);
+            }
+            gmSet(MIGRATION_KEY, true);
+        } catch (_) {}
+    }
+
+    if (isYouTube) {
+        migrateLegacyYouTubeStorage();
+        const storedSettings = gmGet(YT_SETTINGS_KEY, null);
+        if (storedSettings && typeof storedSettings === 'object') {
+            ytSettings = Object.assign({}, DEFAULT_YT_SETTINGS, storedSettings);
+        }
+        const storedQuality = gmGet(YT_QUALITY_KEY, 'hd1080');
+        if (QUALITY_MAP[storedQuality]) selectedQuality = storedQuality;
+        const storedStep = Number(gmGet(YT_SPEED_STEP_KEY, 0.25));
+        if ([0.05, 0.1, 0.25, 0.5].includes(storedStep)) speedStep = storedStep;
     }
 
     // ==========================================
-    // 0.1. ОПИСАНИЯ ДЛЯ ПОДСКАЗОК
-    // ==========================================
-
-    const TOOLTIPS = {
-        smoothAnim: 'Добавляет плавные CSS-переходы для основных контейнеров YouTube.',
-        hideElements: 'Будут скрыты:\n• Кнопка голосового поиска\n• Страна возле иконки\n• Элементы с левой панели\n• Кнопки в плеере\n• Аннотация канала\n• Панель реакций\n• И другие лишние элементы',
-        wheelSpeed: 'Позволяет точно настраивать скорость воспроизведения видео с помощью колеса мыши:\n• Shift + колесо — изменение скорости\n• Обычное колесо — прокрутка страницы',
-        translateComments: 'Добавляет кнопку «Перевести» под каждым комментарием на иностранном языке.\nПеревод выполняется прямо на месте через Google Translate.',
-        compactMode: 'Уменьшает отступы и делает интерфейс более компактным.',
-        autoQuality: 'Автоматически устанавливает выбранное качество видео для всех роликов.',
-        speedHotkeys: 'Горячие клавиши для изменения скорости воспроизведения:\n• Ctrl + ↑ — увеличить\n• Ctrl + ↓ — уменьшить\n• Ctrl + 0 — сбросить'
-    };
-
-    // ==========================================
-    // 0.2. БАЗОВЫЕ СТИЛИ АНИМАЦИИ ПАНЕЛИ
-    // ==========================================
-
-    GM_addStyle(`
-        @keyframes retubeShow {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-    `);
-
-    // ==========================================
-    // 1. CSS-МОДИФИКАТОРЫ
+    // 4. ФУНКЦИОНАЛЬНЫЕ МОДУЛИ YOUTUBE
     // ==========================================
 
     function applySmoothAnimations() {
-        removeStyles('smoothAnim');
-        const style = GM_addStyle(`
-            #columns, #primary, #secondary, #player, ytd-comments {
-                transition: all 0.3s ease-in-out !important;
+        setManagedStyle('yt-smooth', `
+            #columns, #primary, #secondary, ytd-comments, ytd-rich-item-renderer, ytd-compact-video-renderer {
+                transition: opacity 0.22s ease, background-color 0.22s ease !important;
             }
         `);
-        activeStyles.smoothAnim.push(style);
+    }
+
+    function buildHideElementsCSS() {
+        if (!ytSettings.hideElements) return '';
+        const rules = [];
+
+        if (ytSettings.hideHeaderExtras) {
+            rules.push(`
+                #voice-search-button,
+                #country-code,
+                .sbfl_a, .YtSearchboxComponentReportButton, .ytSearchboxComponentReportButton,
+                .gsst_a, .YtSearchboxComponentYtdTextInputAssistantWrapper, .ytSearchboxComponentYtdTextInputAssistantWrapper {
+                    display: none !important;
+                }
+            `);
+        }
+
+        if (ytSettings.hidePlayerClutter) {
+            rules.push(`
+                a.ytp-next-button.ytp-button,
+                a.ytp-prev-button.ytp-button,
+                .ytp-jump-button,
+                .ytp-button.ytp-remote-button,
+                .ytp-button.ytp-miniplayer-button,
+                .ytp-button:has(.ytp-autonav-toggle-button[aria-checked="false"]),
+                button[title="Автовоспроизведение выключено"],
+                button[title="Автоматичне відтворення вимкнено"],
+                button[title="Autoplay is off"],
+                button[title="Субтитры недоступны"],
+                button[title="Субтитри недоступні"],
+                button[title="Subtitles/closed captions unavailable"],
+                .ytp-paid-content-overlay,
+                ytm-paid-content-overlay-renderer,
+                .iv-branding,
+                .annotation.annotation-type-custom.iv-branding,
+                #movie_player > [class^="ytp-ce-"],
+                .ytp-cards-teaser,
+                .ytp-cards-button,
+                .ytp-cards-teaser-text,
+                .ytp-fullerscreen-edu-button-subtle,
+                .ytp-pause-overlay-container,
+                #reaction-control-panel {
+                    display: none !important;
+                }
+            `);
+        }
+
+        if (ytSettings.hideActionButtons) {
+            rules.push(`
+                ytd-download-button-renderer,
+                #sponsor-button,
+                [role="button"][aria-label="Добавить в очередь"],
+                [role="button"][aria-label="Додати в чергу"],
+                [role="button"][aria-label="Add to queue"],
+                yt-button-view-model:has(button[aria-label="Поделиться"]),
+                yt-button-view-model:has(button[aria-label="Создать клип"]),
+                yt-button-view-model:has(button[aria-label="Спасибо"]),
+                yt-button-view-model:has(button[aria-label="Показать текст видео"]),
+                yt-button-view-model:has(button[aria-label="Share"]),
+                yt-button-view-model:has(button[aria-label="Clip"]),
+                yt-button-view-model:has(button[aria-label="Thanks"]),
+                yt-button-view-model:has(button[aria-label="Thank You"]),
+                yt-button-view-model:has(button[aria-label="Show transcript"]),
+                yt-button-view-model:has(button[aria-label="Show text version"]),
+                yt-button-view-model:has(button[aria-label="Поділитися"]),
+                yt-button-view-model:has(button[aria-label="Створити кліп"]),
+                yt-button-view-model:has(button[aria-label="Дякую"]),
+                yt-button-view-model:has(button[aria-label="Показати текстову версію"]) {
+                    display: none !important;
+                }
+            `);
+        }
+
+        if (ytSettings.hideSidebarExtras) {
+            rules.push(`
+                #footer.ytd-guide-renderer,
+                ytd-guide-entry-renderer:has(> a[href^="/gaming"]),
+                ytd-guide-entry-renderer:has(> a[href^="/channel/UCEgdi0XIXXZ-qJOFPf4JSKw"]),
+                ytd-guide-entry-renderer:has(> a[href^="/feed/courses"]),
+                ytd-guide-entry-renderer:has(> a[href^="/podcasts"]),
+                ytd-guide-entry-renderer:has(> a[href^="/playables"]),
+                ytd-guide-entry-renderer:has(> a[href*="youtube.com/premium"]),
+                ytd-guide-entry-renderer:has(> a[href*="music.youtube.com"]),
+                ytd-guide-entry-renderer:has(> a[href*="youtubekids.com"]),
+                ytd-guide-section-renderer:nth-child(3) > #items > ytd-guide-entry-renderer:nth-child(n+2),
+                ytd-guide-section-renderer:nth-child(4) {
+                    display: none !important;
+                }
+            `);
+        }
+
+        if (ytSettings.hidePromosAndShorts) {
+            rules.push(`
+                ytd-search-pyv-renderer,
+                [class^="ytd-promoted-"],
+                ytd-video-renderer + ytd-shelf-renderer,
+                ytd-video-renderer + ytd-reel-shelf-renderer,
+                ytd-reel-shelf-renderer,
+                ytd-rich-section-renderer:has(a[href^="/premium"]),
+                #premium-upsell-link,
+                #clarify-box,
+                .ytd-watch-flexy.attached-message,
+                ytd-popup-container tp-yt-paper-dialog ytd-single-option-survey-renderer,
+                #donation-shelf,
+                .sparkles-light-cta,
+                ytd-feed-nudge-renderer,
+                #teaser-carousel:has(> .ytVideoMetadataCarouselViewModelHost),
+                #newness-dot {
+                    display: none !important;
+                }
+            `);
+        }
+
+        return rules.join('\n');
     }
 
     function applyHideElementsCSS() {
-        removeStyles('hideElements');
-        const style = GM_addStyle(`
-            #voice-search-button { display: none; }
-            #country-code { display: none; }
-            #footer,
-            ytd-guide-section-renderer:nth-child(5) > div > ytd-guide-entry-renderer:nth-child(2),
-            ytd-guide-section-renderer:nth-child(5) > div > ytd-guide-entry-renderer:nth-child(3),
-            ytd-guide-section-renderer:nth-child(5) > div > ytd-guide-entry-renderer:nth-child(4),
-            ytd-guide-section-renderer:nth-child(3) > div > ytd-guide-entry-renderer:nth-child(2),
-            ytd-guide-section-renderer:nth-child(3) > div > ytd-guide-entry-renderer:nth-child(3),
-            ytd-guide-section-renderer:nth-child(3) > div > ytd-guide-entry-renderer:nth-child(4),
-            ytd-guide-section-renderer:nth-child(3) > div > ytd-guide-entry-renderer:nth-child(5),
-            ytd-guide-section-renderer:nth-child(3) > div > ytd-guide-entry-renderer:nth-child(6),
-            ytd-guide-section-renderer:nth-child(3) > div > ytd-guide-entry-renderer:nth-child(7) { display: none !important; }
-            a.ytp-next-button.ytp-button, a.ytp-prev-button.ytp-button, .ytp-jump-button,
-            .ytp-button.ytp-remote-button, .ytp-button.ytp-miniplayer-button,
-            button[title="Автовоспроизведение выключено"], button[title="Автоматичне відтворення вимкнено"],
-            .ytp-button:has(.ytp-autonav-toggle-button[aria-checked="false"]),
-            button[title="Субтитры недоступны"], button[title="Субтитри недоступні"] { display: none !important; }
-            .ytp-paid-content-overlay, .iv-branding, #movie_player > [class^="ytp-ce-"],
-            .ytp-cards-teaser-text, ytm-paid-content-overlay-renderer,
-            .annotation.annotation-type-custom.iv-branding, .ytp-fullerscreen-edu-button-subtle { display: none !important; }
-            #reaction-control-panel { display: none; }
-            .sbfl_a, .YtSearchboxComponentReportButton, .ytSearchboxComponentReportButton { display: none !important; }
-            .gsst_a, .YtSearchboxComponentYtdTextInputAssistantWrapper, .ytSearchboxComponentYtdTextInputAssistantWrapper { display: none !important; }
-            [role="button"][aria-label="Добавить в очередь"], [role="button"][aria-label="Додати в чергу"] { display: none; }
-            yt-multi-page-menu-section-renderer:nth-child(5) { display: none; }
-            ytd-download-button-renderer,
-            yt-button-view-model:has(button[aria-label="Поделиться"]), yt-button-view-model:has(button[aria-label="Создать клип"]),
-            yt-button-view-model:has(button[aria-label="Спасибо"]), yt-button-view-model:has(button[aria-label="Показать текст видео"]),
-            yt-button-view-model:has(button[aria-label="Share"]), yt-button-view-model:has(button[aria-label="Clip"]),
-            yt-button-view-model:has(button[aria-label="Thank You"]), yt-button-view-model:has(button[aria-label="Show text version"]),
-            yt-button-view-model:has(button[aria-label="Поділитися"]), yt-button-view-model:has(button[aria-label="Створити кліп"]),
-            yt-button-view-model:has(button[aria-label="Дякую"]), yt-button-view-model:has(button[aria-label="Показати текстову версію"]) { display: none !important; }
-            ytd-search-pyv-renderer, [class^="ytd-promoted-"], ytd-video-renderer + ytd-shelf-renderer,
-            ytd-video-renderer + ytd-reel-shelf-renderer, ytd-rich-section-renderer:has(a[href^="/premium/"]),
-            #clarify-box, .ytd-watch-flexy.attached-message, ytd-popup-container tp-yt-paper-dialog ytd-single-option-survey-renderer,
-            #donation-shelf ytd-donation-unavailable-renderer, .sparkles-light-cta, ytd-feed-nudge-renderer,
-            .ytp-pause-overlay-container, #teaser-carousel:has(> .ytVideoMetadataCarouselViewModelHost),
-            #premium-upsell-link, .ytd-guide-renderer.style-scope:nth-of-type(4), #sponsor-button, #newness-dot { display: none !important; }
-        `);
-        activeStyles.hideElements.push(style);
+        const css = buildHideElementsCSS();
+        if (css) setManagedStyle('yt-hide', css);
+        else removeManagedStyle('yt-hide');
     }
 
     function applyCompactMode() {
-        removeStyles('compactMode');
-        const style = GM_addStyle(`
+        setManagedStyle('yt-compact', `
             ytd-rich-grid-renderer { --ytd-rich-grid-item-margin: 8px !important; --ytd-rich-grid-gutter-margin: 8px !important; }
             ytd-rich-item-renderer { margin-bottom: 8px !important; }
             ytd-video-renderer, ytd-compact-video-renderer { margin-bottom: 6px !important; padding: 4px 0 !important; }
@@ -282,535 +861,747 @@
             ytd-comment-thread-renderer { margin-bottom: 12px !important; }
             #secondary { padding-left: 8px !important; }
         `);
-        activeStyles.compactMode.push(style);
     }
 
-    // ==========================================
-    // 1.2. АВТО-КАЧЕСТВО
-    // ==========================================
+    // --- 4.1. Авто-качество с мостом через границу песочницы ---
 
-    let qualityObserver = null;
-    let qualityTimeout = null;
-    let qualityInterval = null;
+    const QUALITY_ORDER = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
+    let qualityBridgeInjected = false;
+    let autoQualityActive = false;
+    let qualityTimers = [];
 
-    const QUALITY_MAP = { 'hd720': 'HD (720p)', 'hd1080': 'FHD (1080p)', 'hd1440': '2K (1440p)', 'hd2160': '4K (2160p)' };
+    function pickTargetQuality(available, preferred) {
+        if (!available || !available.length) return null;
+        if (available.includes(preferred)) return preferred;
+        const idx = QUALITY_ORDER.indexOf(preferred);
+        const lower = QUALITY_ORDER.slice(Math.max(0, idx + 1)).find(q => available.includes(q));
+        return lower || QUALITY_ORDER.find(q => available.includes(q)) || available[0];
+    }
+
+    function ensurePageQualityBridge() {
+        if (qualityBridgeInjected) return;
+        qualityBridgeInjected = true;
+        try {
+            const script = document.createElement('script');
+            script.textContent = `(function(){
+                const order = ['highres','hd2160','hd1440','hd1080','hd720','large','medium','small','tiny'];
+                document.addEventListener('bt:set-yt-quality', function(ev) {
+                    const preferred = ev && ev.detail;
+                    const p = document.getElementById('movie_player');
+                    if (!preferred || !p || typeof p.getAvailableQualityLevels !== 'function') return;
+                    const avail = p.getAvailableQualityLevels() || [];
+                    if (!avail.length) return;
+                    let target = avail.includes(preferred) ? preferred : null;
+                    if (!target) {
+                        const idx = order.indexOf(preferred);
+                        target = order.slice(Math.max(0, idx + 1)).find(q => avail.includes(q)) || order.find(q => avail.includes(q)) || avail[0];
+                    }
+                    if (!target || (typeof p.getPlaybackQuality === 'function' && p.getPlaybackQuality() === target)) return;
+                    if (typeof p.setPlaybackQualityRange === 'function') p.setPlaybackQualityRange(target, target);
+                    if (typeof p.setPlaybackQuality === 'function') p.setPlaybackQuality(target);
+                });
+            })();`;
+            (document.head || document.documentElement).appendChild(script);
+            script.remove();
+        } catch (_) {}
+    }
 
     function setPreferredQuality() {
-        const player = document.querySelector('#movie_player');
-        if (!player || !player.getAvailableQualityLevels) return;
-        const available = player.getAvailableQualityLevels();
-        if (!available || available.length === 0) return;
-        const current = player.getPlaybackQuality ? player.getPlaybackQuality() : '';
-        if (current === selectedQuality) return;
-        let target = selectedQuality;
-        if (!available.includes(selectedQuality)) {
-            const order = ['highres', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'small', 'tiny'];
-            const targetIndex = order.indexOf(selectedQuality);
-            const fallback = order.slice(Math.max(0, targetIndex + 1)).find(level => available.includes(level));
-            target = fallback || order.find(level => available.includes(level)) || available[0];
+        const domPlayer = document.getElementById('movie_player');
+        if (!domPlayer) return;
+
+        // 1. Прямой доступ через Xray (Firefox wrappedJSObject) или unsafeWindow
+        let rawPlayer = null;
+        try {
+            rawPlayer = domPlayer.wrappedJSObject
+                || (typeof unsafeWindow !== 'undefined' && unsafeWindow && unsafeWindow.document && unsafeWindow.document.getElementById('movie_player'))
+                || domPlayer;
+        } catch (_) {
+            rawPlayer = domPlayer;
         }
-        if (player.setPlaybackQualityRange) player.setPlaybackQualityRange(target, target);
-        if (player.setPlaybackQuality) player.setPlaybackQuality(target);
+
+        try {
+            if (rawPlayer && typeof rawPlayer.getAvailableQualityLevels === 'function') {
+                const rawLevels = rawPlayer.getAvailableQualityLevels();
+                const available = Array.isArray(rawLevels) ? rawLevels : Array.from(rawLevels || []);
+                if (!available.length) return;
+                const target = pickTargetQuality(available, selectedQuality);
+                const current = typeof rawPlayer.getPlaybackQuality === 'function' ? rawPlayer.getPlaybackQuality() : '';
+                if (!target || current === target) return;
+                if (typeof rawPlayer.setPlaybackQualityRange === 'function') rawPlayer.setPlaybackQualityRange(target, target);
+                if (typeof rawPlayer.setPlaybackQuality === 'function') rawPlayer.setPlaybackQuality(target);
+                return;
+            }
+        } catch (_) {}
+
+        // 2. Резервный мост в page-контекст для изолированных песочниц Chromium
+        ensurePageQualityBridge();
+        document.dispatchEvent(new CustomEvent('bt:set-yt-quality', { detail: selectedQuality }));
+    }
+
+    function scheduleQualityPass() {
+        if (!autoQualityActive) return;
+        qualityTimers.forEach(t => clearTimeout(t));
+        qualityTimers = [
+            setTimeout(setPreferredQuality, 80),
+            setTimeout(setPreferredQuality, 650),
+            setTimeout(setPreferredQuality, 1800)
+        ];
+    }
+
+    function onVideoQualityEvent(e) {
+        if (!autoQualityActive) return;
+        if (e.target && e.target.tagName === 'VIDEO') scheduleQualityPass();
     }
 
     function applyAutoQuality() {
-        if (qualityObserver || !document.body) return;
-        const checkQuality = () => { clearTimeout(qualityTimeout); qualityTimeout = setTimeout(setPreferredQuality, 1000); };
-        qualityObserver = new MutationObserver(() => checkQuality());
-        qualityObserver.observe(document.body, { childList: true, subtree: true });
-        checkQuality();
-        qualityInterval = setInterval(() => { if (!settings.autoQuality) { clearInterval(qualityInterval); return; } setPreferredQuality(); }, 5000);
+        if (autoQualityActive) return;
+        autoQualityActive = true;
+        window.addEventListener('yt-navigate-finish', scheduleQualityPass);
+        window.addEventListener('yt-page-data-updated', scheduleQualityPass);
+        window.addEventListener('loadedmetadata', onVideoQualityEvent, true);
+        window.addEventListener('playing', onVideoQualityEvent, true);
+        scheduleQualityPass();
     }
 
     function removeAutoQuality() {
-        if (qualityObserver) { qualityObserver.disconnect(); qualityObserver = null; }
-        clearTimeout(qualityTimeout);
-        clearInterval(qualityInterval);
+        autoQualityActive = false;
+        qualityTimers.forEach(t => clearTimeout(t));
+        qualityTimers = [];
+        window.removeEventListener('yt-navigate-finish', scheduleQualityPass);
+        window.removeEventListener('yt-page-data-updated', scheduleQualityPass);
+        window.removeEventListener('loadedmetadata', onVideoQualityEvent, true);
+        window.removeEventListener('playing', onVideoQualityEvent, true);
     }
 
-    // ==========================================
-    // 1.3. ГОРЯЧИЕ КЛАВИШИ И СКОРОСТЬ
-    // ==========================================
+    // --- 4.2. Скорость воспроизведения (колесо и клавиатура) ---
 
     let speedHotkeyHandler = null;
+    let wheelSpeedHandler = null;
+
+    function getActiveWatchVideo() {
+        const path = location.pathname || '';
+        const isWatchRoute = /^\/(watch|shorts|live)\b/.test(path);
+        const candidates = Array.from(document.querySelectorAll('video')).filter(v => {
+            if (v.closest('ytd-moving-thumbnail-renderer, #inline-preview-player')) return false;
+            return v.readyState > 0 && v.offsetWidth > 120 && v.offsetHeight > 80;
+        });
+        if (isWatchRoute) return candidates[0] || document.querySelector('#movie_player video, ytd-shorts video');
+        return candidates.find(v => !v.paused) || null;
+    }
+
+    function applyPlaybackRate(video, rate) {
+        const clamped = Math.round(Math.max(0.25, Math.min(4, rate)) * 100) / 100;
+        video.playbackRate = clamped;
+        showOSD('Скорость: ' + clamped.toFixed(2) + '×');
+    }
 
     function applySpeedHotkeys() {
         if (speedHotkeyHandler) return;
-        speedHotkeyHandler = function(e) {
-            if (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName) || !e.ctrlKey || e.altKey || e.metaKey) return;
-            const video = document.querySelector('video');
+        speedHotkeyHandler = function (e) {
+            if (!e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+            const target = e.target;
+            if (target && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return;
+            if (e.key !== 'ArrowUp' && e.key !== 'ArrowDown' && e.key !== '0') return;
+
+            const video = getActiveWatchVideo();
             if (!video) return;
-            let newRate = video.playbackRate || 1;
-            if (e.key === 'ArrowUp') { e.preventDefault(); newRate = Math.min(4, newRate + speedStep); }
-            else if (e.key === 'ArrowDown') { e.preventDefault(); newRate = Math.max(0.25, newRate - speedStep); }
-            else if (e.key === '0') { e.preventDefault(); newRate = 1; }
-            else return;
-            newRate = Math.round(newRate * 100) / 100;
-            video.playbackRate = newRate;
-            showSpeedOSD(newRate);
+
+            e.preventDefault();
+            const current = video.playbackRate || 1;
+            if (e.key === 'ArrowUp') applyPlaybackRate(video, current + speedStep);
+            else if (e.key === 'ArrowDown') applyPlaybackRate(video, current - speedStep);
+            else applyPlaybackRate(video, 1);
         };
         window.addEventListener('keydown', speedHotkeyHandler, true);
     }
 
     function removeSpeedHotkeys() {
-        if (speedHotkeyHandler) { window.removeEventListener('keydown', speedHotkeyHandler, true); speedHotkeyHandler = null; }
+        if (!speedHotkeyHandler) return;
+        window.removeEventListener('keydown', speedHotkeyHandler, true);
+        speedHotkeyHandler = null;
     }
-
-    function showSpeedOSD(rate) {
-        let osd = document.getElementById('retube-speed-osd');
-        if (!osd) {
-            osd = document.createElement('div');
-            osd.id = 'retube-speed-osd';
-            osd.style.cssText = `position: fixed; top: 80px; left: 50%; transform: translateX(-50%); z-index: 99999;
-                background: rgba(28, 31, 42, 0.85); color: #c9d0d3; padding: 10px 20px; border-radius: 8px;
-                border: 1px solid rgba(150, 165, 195, 0.18); font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-                font-size: 16px; font-weight: 300; pointer-events: none; transition: opacity 0.3s ease;
-                backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);`;
-            document.body.appendChild(osd);
-        }
-        osd.textContent = 'Скорость: ' + rate.toFixed(2) + '×';
-        osd.style.opacity = '1';
-        clearTimeout(osd._timer);
-        osd._timer = setTimeout(() => { osd.style.opacity = '0'; }, 1000);
-    }
-
-    let wheelSpeedHandler = null;
 
     function applyWheelSpeed() {
-        removeStyles('wheelSpeed');
         if (wheelSpeedHandler) return;
-        wheelSpeedHandler = function(e) {
+        wheelSpeedHandler = function (e) {
+            if (!e.shiftKey) return;
             const player = document.querySelector('#movie_player, .html5-video-player');
-            if (!player || !player.contains(e.target) || !e.shiftKey) return;
-            const video = document.querySelector('video');
+            if (!player || !player.contains(e.target)) return;
+            const video = player.querySelector('video') || document.querySelector('video');
             if (!video) return;
-            e.preventDefault(); e.stopPropagation();
+            e.preventDefault();
+            e.stopPropagation();
             const delta = e.deltaY > 0 ? -speedStep : speedStep;
-            let newRate = (video.playbackRate || 1) + delta;
-            newRate = Math.max(0.25, Math.min(4, newRate));
-            newRate = Math.round(newRate * 100) / 100;
-            video.playbackRate = newRate;
-            showSpeedOSD(newRate);
+            applyPlaybackRate(video, (video.playbackRate || 1) + delta);
         };
         window.addEventListener('wheel', wheelSpeedHandler, { passive: false, capture: true });
     }
 
     function removeWheelSpeed() {
-        if (wheelSpeedHandler) { window.removeEventListener('wheel', wheelSpeedHandler, { capture: true }); wheelSpeedHandler = null; }
+        if (!wheelSpeedHandler) return;
+        window.removeEventListener('wheel', wheelSpeedHandler, { capture: true });
+        wheelSpeedHandler = null;
     }
 
-    // ==========================================
-    // 1.4. ПЕРЕВОД КОММЕНТАРИЕВ
-    // ==========================================
+    // --- 4.3. Перевод комментариев (debounce + учёт переиспользования узлов YouTube) ---
 
     let translateObserver = null;
+    let translateScanTimer = null;
+
     function isRussian(text) {
         const value = (text || '').toLowerCase();
         if (/[іїєґўђјљњћќџѝ]/i.test(value)) return false;
-        return /[а-яё]/i.test(value) && !/[a-z]{3,}/i.test(value);
+        const cyr = (value.match(/[а-яё]/g) || []).length;
+        if (cyr === 0) return false;
+        const lat = (value.match(/[a-z]/g) || []).length;
+        return cyr >= lat;
     }
+
     function getTranslationCache() {
-        try { return JSON.parse(localStorage.getItem(TRANSLATION_CACHE_KEY) || '{}'); } catch (e) { return {}; }
+        const cache = gmGet(TRANSLATION_CACHE_KEY, {});
+        return cache && typeof cache === 'object' && !Array.isArray(cache) ? cache : {};
     }
+
     function saveTranslationCache(cache) {
-        try { localStorage.setItem(TRANSLATION_CACHE_KEY, JSON.stringify(Object.entries(cache).slice(-300).reduce((obj, pair) => { obj[pair[0]] = pair[1]; return obj; }, {}))); } catch (e) {}
+        const trimmed = Object.fromEntries(Object.entries(cache).slice(-300));
+        gmSet(TRANSLATION_CACHE_KEY, trimmed);
     }
 
     function translateText(text, targetLang, callback) {
-        const input = text.slice(0, 1500), cache = getTranslationCache(), cacheKey = targetLang + ':' + input;
-        if (cache[cacheKey]) { callback(cache[cacheKey]); return; }
-        const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=' + targetLang + '&dt=t&q=' + encodeURIComponent(input);
+        // Безопасная обрезка по кодовым точкам Unicode без разрезания эмодзи (суррогатных пар)
+        const input = Array.from(text || '').slice(0, 1500).join('');
+        if (!input) { callback(null); return; }
+        const cache = getTranslationCache();
+        const cacheKey = targetLang + ':' + input;
+        if (cache[cacheKey]) {
+            callback(cache[cacheKey]);
+            return;
+        }
+        const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl='
+            + encodeURIComponent(targetLang) + '&dt=t&q=' + encodeURIComponent(input);
         GM_xmlhttpRequest({
-            method: 'GET', url: url,
-            onload: function(response) {
+            method: 'GET',
+            url,
+            onload(response) {
                 try {
                     const data = JSON.parse(response.responseText);
                     let translated = '';
-                    if (data && data[0]) { for (let i = 0; i < data[0].length; i++) { if (data[0][i] && data[0][i][0]) translated += data[0][i][0]; } }
-                    if (translated) { cache[cacheKey] = translated; saveTranslationCache(cache); }
+                    if (data && Array.isArray(data[0])) {
+                        for (let i = 0; i < data[0].length; i++) {
+                            if (data[0][i] && data[0][i][0]) translated += data[0][i][0];
+                        }
+                    }
+                    if (translated) {
+                        cache[cacheKey] = translated;
+                        saveTranslationCache(cache);
+                    }
                     callback(translated || null);
-                } catch (e) { callback(null); }
+                } catch (_) {
+                    callback(null);
+                }
             },
-            onerror: function() { callback(null); }
+            onerror() {
+                callback(null);
+            }
         });
+    }
+
+    function scanCommentsForTranslation() {
+        setManagedStyle('yt-translate-ui', `
+            .retube-translate-wrapper { margin-top: 6px; }
+            .retube-translate-btn {
+                display: inline-block; padding: 3px 10px; font-size: 12px;
+                font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300;
+                background: rgba(96, 100, 110, 0.37); color: rgb(201, 208, 211);
+                border: 1px solid rgb(72, 75, 91); border-radius: 10px; cursor: pointer;
+                transition: background 0.2s ease, color 0.2s ease;
+            }
+            .retube-translate-btn:hover { background: rgba(96, 100, 110, 0.62); color: #fff; }
+            .retube-translation-box {
+                display: none; margin-top: 8px; padding: 10px 12px;
+                background: rgba(87, 133, 186, 0.12); border-left: 3px solid rgba(122, 163, 212, 0.7);
+                border-radius: 6px; font-size: 14px; line-height: 1.5; color: #ddd;
+                white-space: pre-wrap; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300;
+            }
+        `);
+
+        const comments = document.querySelectorAll('ytd-comment-view-model #content-text, ytd-comment-renderer #content-text');
+        comments.forEach(textEl => {
+            const currentText = (textEl.textContent || '').trim();
+            if (textEl.dataset.btSourceText === currentText) return;
+
+            // Если YouTube переиспользовал DOM-узел комментария для нового видео — очищаем старую кнопку/перевод
+            const nextSibling = textEl.nextElementSibling;
+            if (nextSibling && nextSibling.classList.contains('retube-translate-wrapper')) {
+                nextSibling.remove();
+            }
+            textEl.dataset.btSourceText = currentText;
+
+            if (!currentText || isRussian(currentText)) return;
+
+            const wrapper = document.createElement('div');
+            wrapper.className = 'retube-translate-wrapper';
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'retube-translate-btn';
+            btn.textContent = 'Перевести';
+
+            const box = document.createElement('div');
+            box.className = 'retube-translation-box';
+
+            let translatedForText = '';
+            let loading = false;
+
+            btn.addEventListener('click', e => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (loading) return;
+
+                const liveText = (textEl.textContent || '').trim();
+                if (translatedForText && translatedForText === liveText) {
+                    const visible = box.style.display !== 'none';
+                    box.style.display = visible ? 'none' : 'block';
+                    btn.textContent = visible ? 'Показать перевод' : 'Скрыть перевод';
+                    return;
+                }
+
+                loading = true;
+                btn.disabled = true;
+                btn.textContent = 'Перевод…';
+                box.style.display = 'block';
+                box.textContent = 'Перевод…';
+
+                translateText(liveText, 'ru', result => {
+                    loading = false;
+                    btn.disabled = false;
+                    if (result) {
+                        translatedForText = liveText;
+                        box.textContent = result;
+                        btn.textContent = 'Скрыть перевод';
+                    } else {
+                        box.textContent = 'Не удалось перевести. Попробуйте позже.';
+                        btn.textContent = 'Повторить';
+                    }
+                });
+            });
+
+            wrapper.append(btn, box);
+            if (textEl.parentNode) textEl.parentNode.insertBefore(wrapper, textEl.nextSibling);
+        });
+    }
+
+    function scheduleCommentScan() {
+        clearTimeout(translateScanTimer);
+        translateScanTimer = setTimeout(scanCommentsForTranslation, 180);
+    }
+
+    function resetRecycledComments() {
+        document.querySelectorAll('.retube-translate-wrapper').forEach(el => el.remove());
+        document.querySelectorAll('[data-bt-source-text]').forEach(el => { delete el.dataset.btSourceText; });
+        scheduleCommentScan();
     }
 
     function applyTranslateComments() {
         if (translateObserver || !document.body) return;
-        const addTranslateButtons = () => {
-            const comments = document.querySelectorAll('ytd-comment-view-model #content-text, ytd-comment-renderer #content-text');
-            comments.forEach(textEl => {
-                if (textEl.dataset.retubeTranslateAdded) return;
-                textEl.dataset.retubeTranslateAdded = '1';
-                const originalText = textEl.textContent.trim();
-                if (!originalText || isRussian(originalText)) return;
-
-                const btnWrapper = document.createElement('div');
-                btnWrapper.className = 'retube-translate-wrapper';
-                btnWrapper.style.cssText = 'margin-top: 6px;';
-
-                const btn = document.createElement('button');
-                btn.className = 'retube-translate-btn';
-                btn.textContent = 'Перевести';
-                btn.style.cssText = `display: inline-block; padding: 3px 10px; font-size: 12px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-                    font-weight: 300; background: rgba(96, 100, 110, 0.37); color: rgb(201, 208, 211); border: 1px solid rgb(72, 75, 91);
-                    border-radius: 10px; cursor: pointer; transition: background 0.2s ease, color 0.2s ease;`;
-                btn.addEventListener('mouseenter', () => { btn.style.background = 'rgba(96, 100, 110, 0.6)'; btn.style.color = '#fff'; });
-                btn.addEventListener('mouseleave', () => { btn.style.background = 'rgba(96, 100, 110, 0.37)'; btn.style.color = 'rgb(201, 208, 211)'; });
-
-                const translationBox = document.createElement('div');
-                translationBox.className = 'retube-translation-box';
-                translationBox.style.cssText = `display: none; margin-top: 8px; padding: 10px 12px; background: rgba(87, 133, 186, 0.12);
-                    border-left: 3px solid rgba(122, 163, 212, 0.7); border-radius: 6px; font-size: 14px; line-height: 1.5; color: #ddd;
-                    white-space: pre-wrap; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300;`;
-
-                let translated = false;
-                let loading = false;
-
-                btn.addEventListener('click', (e) => {
-                    e.preventDefault(); e.stopPropagation();
-                    if (loading) return;
-                    if (translated) {
-                        const visible = translationBox.style.display !== 'none';
-                        translationBox.style.display = visible ? 'none' : 'block';
-                        btn.textContent = visible ? 'Показать перевод' : 'Скрыть перевод';
-                        return;
-                    }
-                    loading = true; btn.textContent = 'Перевод…'; btn.disabled = true;
-                    translationBox.style.display = 'block'; translationBox.textContent = 'Перевод…';
-                    translateText(originalText, 'ru', (result) => {
-                        loading = false; btn.disabled = false;
-                        if (result) { translated = true; translationBox.textContent = result; btn.textContent = 'Скрыть перевод'; }
-                        else { translationBox.textContent = 'Не удалось перевести. Попробуйте позже.'; btn.textContent = 'Повторить'; }
-                    });
-                });
-                btnWrapper.appendChild(btn);
-                btnWrapper.appendChild(translationBox);
-                textEl.parentNode.insertBefore(btnWrapper, textEl.nextSibling);
+        scanCommentsForTranslation();
+        translateObserver = new MutationObserver(mutations => {
+            const relevant = mutations.some(m => {
+                const t = m.target;
+                if (!t || t.nodeType !== 1) return false;
+                if (t.closest && t.closest('#movie_player, .retube-translate-wrapper')) return false;
+                return true;
             });
-        };
-        addTranslateButtons();
-        translateObserver = new MutationObserver(() => addTranslateButtons());
+            if (relevant) scheduleCommentScan();
+        });
         translateObserver.observe(document.body, { childList: true, subtree: true });
+        window.addEventListener('yt-navigate-finish', resetRecycledComments);
     }
 
     function removeTranslateComments() {
-        if (translateObserver) { translateObserver.disconnect(); translateObserver = null; }
+        clearTimeout(translateScanTimer);
+        if (translateObserver) {
+            translateObserver.disconnect();
+            translateObserver = null;
+        }
+        window.removeEventListener('yt-navigate-finish', resetRecycledComments);
+        removeManagedStyle('yt-translate-ui');
         document.querySelectorAll('.retube-translate-wrapper').forEach(el => el.remove());
-        document.querySelectorAll('[data-retube-translate-added]').forEach(el => { delete el.dataset.retubeTranslateAdded; });
+        document.querySelectorAll('[data-bt-source-text]').forEach(el => { delete el.dataset.btSourceText; });
     }
 
-    function removeStyles(key) {
-        activeStyles[key].forEach(el => { if (el && el.parentNode) el.parentNode.removeChild(el); });
-        activeStyles[key] = [];
-    }
-
-    function toggleFeature(key, enabled) {
-        if (key === 'smoothAnim') { if (enabled) applySmoothAnimations(); else removeStyles('smoothAnim'); }
-        if (key === 'hideElements') { if (enabled) applyHideElementsCSS(); else removeStyles('hideElements'); }
-        if (key === 'wheelSpeed') { if (enabled) applyWheelSpeed(); else removeWheelSpeed(); }
-        if (key === 'translateComments') { if (enabled) applyTranslateComments(); else removeTranslateComments(); }
-        if (key === 'compactMode') { if (enabled) applyCompactMode(); else removeStyles('compactMode'); }
-        if (key === 'autoQuality') { if (enabled) applyAutoQuality(); else removeAutoQuality(); }
-        if (key === 'speedHotkeys') { if (enabled) applySpeedHotkeys(); else removeSpeedHotkeys(); }
+    function syncYouTubeFeatures() {
+        if (!isYouTube) return;
+        if (ytSettings.smoothAnim) applySmoothAnimations(); else removeManagedStyle('yt-smooth');
+        applyHideElementsCSS();
+        if (ytSettings.compactMode) applyCompactMode(); else removeManagedStyle('yt-compact');
+        if (ytSettings.autoQuality) applyAutoQuality(); else removeAutoQuality();
+        if (ytSettings.wheelSpeed) applyWheelSpeed(); else removeWheelSpeed();
+        if (ytSettings.speedHotkeys) applySpeedHotkeys(); else removeSpeedHotkeys();
+        if (ytSettings.translateComments) applyTranslateComments(); else removeTranslateComments();
     }
 
     // ==========================================
-    // 2. ПАНЕЛЬ НАСТРОЕК
+    // 5. ЛЕНИВЫЙ РЕНДЕР ПАНЕЛИ НАСТРОЕК (SHADOW DOM)
     // ==========================================
 
-    let tooltipEl = null;
-    let tooltipTimer = null;
-
-    function ensureTooltip() {
-        if (tooltipEl) return tooltipEl;
-        tooltipEl = document.createElement('div');
-        tooltipEl.id = 'retube-tooltip';
-        tooltipEl.style.cssText = `position: fixed; z-index: 10000; max-width: 400px; padding: 12px 14px; background: rgba(58, 67, 77, 0.75);
-            color: #fff; border-radius: 13px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300; font-size: 14px;
-            line-height: 1.5; white-space: pre-line; box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px); pointer-events: none; opacity: 0; transform: translateY(-6px);
-            transition: opacity 0.25s ease, transform 0.25s ease;`;
-        document.body.appendChild(tooltipEl);
-        return tooltipEl;
+    function syncYouTubeUI() {
+        if (!uiRefs || !isYouTube) return;
+        if (uiRefs.checkboxes) {
+            uiRefs.checkboxes.forEach((cb, key) => { cb.checked = Boolean(ytSettings[key]); });
+        }
+        if (uiRefs.subList) {
+            uiRefs.subList.classList.toggle('muted', !ytSettings.hideElements);
+        }
+        if (uiRefs.qualitySelect) uiRefs.qualitySelect.value = selectedQuality;
+        if (uiRefs.speedSelect) uiRefs.speedSelect.value = String(speedStep);
     }
 
-    function showTooltip(text, cursorX, cursorY) {
-        const tip = ensureTooltip();
-        tip.textContent = text;
-        tip.style.opacity = '0'; tip.style.transform = 'translateY(-6px)';
-        tip.style.left = '0px'; tip.style.top = '0px'; tip.style.visibility = 'hidden';
-
-        const tipRect = tip.getBoundingClientRect();
-        const margin = 16;
-        let left = cursorX - tipRect.width / 2;
-        let top = cursorY + margin;
-        if (left < 10) left = 10;
-        if (left + tipRect.width > window.innerWidth - 10) left = window.innerWidth - tipRect.width - 10;
-        if (top + tipRect.height > window.innerHeight - 10) top = cursorY - tipRect.height - margin;
-
-        tip.style.left = left + 'px'; tip.style.top = top + 'px'; tip.style.visibility = 'visible';
-        requestAnimationFrame(() => { tip.style.opacity = '1'; tip.style.transform = 'translateY(0)'; });
-    }
-
-    function hideTooltip() {
-        if (tooltipTimer) { clearTimeout(tooltipTimer); tooltipTimer = null; }
-        if (tooltipEl) { tooltipEl.style.opacity = '0'; tooltipEl.style.transform = 'translateY(-6px)'; }
-    }
-
-    let dragState = null;
-
-    function makeDraggable(panel, handle) {
-        handle.style.cursor = 'grab';
-        handle.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            const rect = panel.getBoundingClientRect();
-            dragState = { offsetX: e.clientX - rect.left, offsetY: e.clientY - rect.top };
-            handle.style.cursor = 'grabbing';
-            document.addEventListener('mousemove', onDragMove);
-            document.addEventListener('mouseup', onDragEnd);
+    function attachTooltipBehavior(el, text) {
+        if (!text) return;
+        el.addEventListener('mouseenter', e => {
+            clearTimeout(tooltipTimer);
+            const x = e.clientX;
+            const y = e.clientY;
+            tooltipTimer = setTimeout(() => showTooltip(text, x, y), 380);
         });
-
-        function onDragMove(e) {
-            if (!dragState) return;
-            let left = e.clientX - dragState.offsetX;
-            let top = e.clientY - dragState.offsetY;
-            const maxLeft = window.innerWidth - panel.offsetWidth - 4;
-            const maxTop = window.innerHeight - panel.offsetHeight - 4;
-            if (left < 4) left = 4; if (top < 4) top = 4; if (left > maxLeft) left = maxLeft; if (top > maxTop) top = maxTop;
-            panel.style.left = left + 'px'; panel.style.top = top + 'px'; panel.style.right = 'auto';
-        }
-
-        function onDragEnd() {
-            if (dragState) {
-                try { localStorage.setItem(POS_KEY, JSON.stringify({ left: panel.style.left, top: panel.style.top })); } catch (e) {}
+        el.addEventListener('mousemove', e => {
+            if (tooltipEl && tooltipEl.classList.contains('visible')) {
+                showTooltip(text, e.clientX, e.clientY);
             }
-            dragState = null; handle.style.cursor = 'grab';
-            document.removeEventListener('mousemove', onDragMove); document.removeEventListener('mouseup', onDragEnd);
-        }
+        });
+        el.addEventListener('mouseleave', hideTooltip);
     }
 
-    function createSettingsPanel() {
-        if (!document.body || document.getElementById('retube-settings-panel')) return;
+    function ensureSettingsPanel() {
+        if (panelEl) return panelEl;
+        const root = ensureShadowHost();
+        if (!root) return null;
 
-        const panel = document.createElement('div');
-        panel.id = 'retube-settings-panel';
-        panel.style.cssText = `position: fixed; z-index: 9999; width: 320px; max-height: 85vh; padding: 0 0 14px 0;
-            background: rgba(30, 32, 40, 0.72); color: #fff; border: 1px solid rgba(160, 175, 205, 0.22); border-radius: 14px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-            font-weight: 300; display: none; overflow-y: auto; backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-            box-shadow: 0 12px 36px rgba(0, 0, 0, 0.28); animation: retubeShow 0.25s ease;`;
+        uiRefs = { checkboxes: new Map() };
 
-        let initialLeft, initialTop;
-        try {
-            const savedPos = localStorage.getItem(POS_KEY);
-            if (savedPos) { const pos = JSON.parse(savedPos); initialLeft = pos.left; initialTop = pos.top; }
-        } catch (e) {}
-        if (initialLeft && initialTop) { panel.style.left = initialLeft; panel.style.top = initialTop; }
-        else {
-            const w = 320, h = 480;
-            panel.style.left = Math.max(20, (window.innerWidth - w) / 2) + 'px';
-            panel.style.top = Math.max(20, (window.innerHeight - h) / 2) + 'px';
+        panelEl = document.createElement('div');
+        panelEl.className = 'bt-panel';
+        panelEl.setAttribute('role', 'dialog');
+        panelEl.setAttribute('aria-label', 'Настройки Browser Tweaks');
+
+        const savedPos = gmGet(PANEL_POS_KEY, null);
+        if (savedPos && Number.isFinite(savedPos.left) && Number.isFinite(savedPos.top)) {
+            panelEl.style.left = Math.round(savedPos.left) + 'px';
+            panelEl.style.top = Math.round(savedPos.top) + 'px';
+        } else {
+            panelEl.style.left = Math.max(16, window.innerWidth - 356) + 'px';
+            panelEl.style.top = '72px';
         }
 
         const header = document.createElement('div');
-        header.style.cssText = `display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
-            margin: 0 0 10px 0; background: rgba(67, 77, 105, 0.25); border-radius: 14px 14px 0 0; user-select: none;`;
-
+        header.className = 'bt-header';
         const title = document.createElement('span');
-        title.textContent = 'YouTube Tweaks';
-        title.style.cssText = `font-weight: bold; margin-left: 6px; font-size: 20px; pointer-events: none; color: rgb(201, 208, 211);`;
-        header.appendChild(title);
+        title.className = 'bt-title';
+        title.textContent = isYouTube ? 'Browser Tweaks · YouTube' : 'Browser Tweaks';
+        const grip = document.createElement('span');
+        grip.className = 'bt-grip';
+        grip.textContent = '⋮⋮';
+        header.append(title, grip);
+        panelEl.appendChild(header);
 
-        const dots = document.createElement('span');
-        dots.textContent = '⋮⋮';
-        dots.style.cssText = 'opacity: 0.4; font-size: 14px; letter-spacing: -2px; color: rgb(201, 208, 211);';
-        header.appendChild(dots);
-        panel.appendChild(header);
+        const body = document.createElement('div');
+        body.className = 'bt-body';
 
-        const makeCheckbox = (id, labelText, key) => {
-            const label = document.createElement('label');
-            label.style.cssText = `display: flex; align-items: center; gap: 8px; margin: 0 8px 6px 8px; cursor: pointer;
-                padding: 4px 8px; border-radius: 6px; transition: background 0.15s ease; font-size: 14px; color: rgb(201, 208, 211);
-                font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif; font-weight: 300; user-select: none;`;
+        if (isYouTube) {
+            const createCheckRow = (key, labelText, tooltipText) => {
+                const label = document.createElement('label');
+                label.className = 'bt-row-check';
+                const cb = document.createElement('input');
+                cb.type = 'checkbox';
+                cb.checked = Boolean(ytSettings[key]);
+                const text = document.createElement('span');
+                text.textContent = labelText;
+                label.append(cb, text);
 
-            const cb = document.createElement('input');
-            cb.type = 'checkbox'; cb.id = id; cb.checked = settings[key];
-            cb.style.cssText = 'width: 16px; height: 16px; accent-color: #9ba8c2; cursor: pointer;';
+                cb.addEventListener('change', () => {
+                    ytSettings[key] = cb.checked;
+                    gmSet(YT_SETTINGS_KEY, ytSettings);
+                    syncYouTubeFeatures();
+                    syncYouTubeUI();
+                });
 
-            const span = document.createElement('span');
-            span.textContent = labelText; span.style.cssText = 'font-size: 14px;';
+                attachTooltipBehavior(label, tooltipText);
+                uiRefs.checkboxes.set(key, cb);
+                return label;
+            };
 
-            label.appendChild(cb); label.appendChild(span); panel.appendChild(label);
+            body.appendChild(createCheckRow('smoothAnim', 'Плавные анимации страницы', TOOLTIPS.smoothAnim));
 
-            label.addEventListener('mouseenter', (e) => {
-                label.style.background = 'rgba(120, 125, 130, 0.15)';
-                if (tooltipTimer) clearTimeout(tooltipTimer);
-                const x = e.clientX, y = e.clientY;
-                tooltipTimer = setTimeout(() => showTooltip(TOOLTIPS[key], x, y), 400);
+            // Строка «Скрыть лишние элементы» + раскрывающееся подменю категорий
+            const hideRowWrap = document.createElement('div');
+            hideRowWrap.className = 'bt-row-with-expand';
+            const hideMainRow = createCheckRow('hideElements', 'Скрыть лишние элементы', TOOLTIPS.hideElements);
+            const expandBtn = document.createElement('button');
+            expandBtn.type = 'button';
+            expandBtn.className = 'bt-expand-btn';
+            expandBtn.setAttribute('aria-expanded', 'false');
+            expandBtn.title = 'Настроить категории скрываемых элементов';
+            expandBtn.textContent = '▾';
+            hideRowWrap.append(hideMainRow, expandBtn);
+            body.appendChild(hideRowWrap);
+
+            const subList = document.createElement('div');
+            subList.className = 'bt-sublist' + (ytSettings.hideElements ? '' : ' muted');
+            uiRefs.subList = subList;
+
+            HIDE_SUBKEYS.forEach(([subKey, subLabel]) => {
+                subList.appendChild(createCheckRow(subKey, subLabel));
+            });
+            body.appendChild(subList);
+
+            expandBtn.addEventListener('click', () => {
+                const isOpen = subList.classList.toggle('open');
+                expandBtn.setAttribute('aria-expanded', String(isOpen));
             });
 
-            label.addEventListener('mousemove', (e) => {
-                if (tooltipEl && tooltipEl.style.opacity === '1') {
-                    const tipRect = tooltipEl.getBoundingClientRect();
-                    let left = e.clientX - tipRect.width / 2; let top = e.clientY + 16;
-                    if (left < 10) left = 10;
-                    if (left + tipRect.width > window.innerWidth - 10) left = window.innerWidth - tipRect.width - 10;
-                    if (top + tipRect.height > window.innerHeight - 10) top = e.clientY - tipRect.height - 16;
-                    tooltipEl.style.left = left + 'px'; tooltipEl.style.top = top + 'px';
-                }
+            body.appendChild(createCheckRow('wheelSpeed', 'Скорость колесом мыши (Shift)', TOOLTIPS.wheelSpeed));
+            body.appendChild(createCheckRow('translateComments', 'Перевод комментариев', TOOLTIPS.translateComments));
+            body.appendChild(createCheckRow('compactMode', 'Компактный режим', TOOLTIPS.compactMode));
+            body.appendChild(createCheckRow('autoQuality', 'Авто-качество видео', TOOLTIPS.autoQuality));
+            body.appendChild(createCheckRow('speedHotkeys', 'Горячие клавиши скорости', TOOLTIPS.speedHotkeys));
+
+            // Выбор качества
+            const qualityRow = document.createElement('div');
+            qualityRow.className = 'bt-select-row';
+            const qualityLabel = document.createElement('span');
+            qualityLabel.className = 'bt-select-label';
+            qualityLabel.textContent = 'Качество:';
+            const qualitySelect = document.createElement('select');
+            qualitySelect.className = 'bt-select';
+            Object.entries(QUALITY_MAP).forEach(([val, text]) => {
+                const opt = document.createElement('option');
+                opt.value = val;
+                opt.textContent = text;
+                opt.selected = val === selectedQuality;
+                qualitySelect.appendChild(opt);
             });
+            qualitySelect.addEventListener('change', () => {
+                selectedQuality = qualitySelect.value;
+                gmSet(YT_QUALITY_KEY, selectedQuality);
+                if (ytSettings.autoQuality) setPreferredQuality();
+            });
+            uiRefs.qualitySelect = qualitySelect;
+            qualityRow.append(qualityLabel, qualitySelect);
+            body.appendChild(qualityRow);
 
-            label.addEventListener('mouseleave', () => { label.style.background = 'transparent'; hideTooltip(); });
-            return cb;
-        };
+            // Выбор шага скорости
+            const speedRow = document.createElement('div');
+            speedRow.className = 'bt-select-row';
+            const speedLabel = document.createElement('span');
+            speedLabel.className = 'bt-select-label';
+            speedLabel.textContent = 'Шаг скорости:';
+            const speedSelect = document.createElement('select');
+            speedSelect.className = 'bt-select';
+            [
+                [0.05, '0,05×'],
+                [0.1, '0,1×'],
+                [0.25, '0,25×'],
+                [0.5, '0,5×']
+            ].forEach(([val, text]) => {
+                const opt = document.createElement('option');
+                opt.value = String(val);
+                opt.textContent = text;
+                opt.selected = val === speedStep;
+                speedSelect.appendChild(opt);
+            });
+            speedSelect.addEventListener('change', () => {
+                speedStep = Number(speedSelect.value);
+                gmSet(YT_SPEED_STEP_KEY, speedStep);
+            });
+            uiRefs.speedSelect = speedSelect;
+            speedRow.append(speedLabel, speedSelect);
+            body.appendChild(speedRow);
+        }
 
-        const cbAnim = makeCheckbox('retube-smooth-anim', 'Плавные анимации страницы', 'smoothAnim');
-        const cbHide = makeCheckbox('retube-hide-elements', 'Скрыть лишние элементы', 'hideElements');
-        const cbWheel = makeCheckbox('retube-wheel-speed', 'Точная настройка скорости колесом мыши', 'wheelSpeed');
-        const cbTranslate = makeCheckbox('retube-translate-comments', 'Перевод комментариев', 'translateComments');
-        const cbCompact = makeCheckbox('retube-compact-mode', 'Компактный режим', 'compactMode');
-        const cbAutoQuality = makeCheckbox('retube-auto-quality', 'Авто-качество', 'autoQuality');
-        const cbSpeedHotkeys = makeCheckbox('retube-speed-hotkeys', 'Горячие клавиши для скорости', 'speedHotkeys');
-        const featureCheckboxes = [
-            [cbAnim, 'smoothAnim'], [cbHide, 'hideElements'], [cbWheel, 'wheelSpeed'],
-            [cbTranslate, 'translateComments'], [cbCompact, 'compactMode'],
-            [cbAutoQuality, 'autoQuality'], [cbSpeedHotkeys, 'speedHotkeys']
-        ];
+        // Карточка глобального шрифта Ubuntu Light (общая для всех сайтов)
+        const fontCard = document.createElement('div');
+        fontCard.className = 'bt-card';
 
-        const qualityRow = document.createElement('div');
-        qualityRow.style.cssText = 'display: flex; align-items: center; gap: 8px; margin: 0 8px 6px 8px; padding: 4px 8px;';
+        const fontTitle = document.createElement('div');
+        fontTitle.className = 'bt-card-title';
+        fontTitle.textContent = 'Глобальный шрифт Ubuntu Light';
+        fontCard.appendChild(fontTitle);
 
-        const qualityLabel = document.createElement('span');
-        qualityLabel.textContent = 'Качество:';
-        qualityLabel.style.cssText = 'font-size: 13px; color: rgb(201, 208, 211);';
-        qualityRow.appendChild(qualityLabel);
-
-        const qualitySelect = document.createElement('select');
-        qualitySelect.id = 'retube-quality-select';
-        qualitySelect.style.cssText = `flex: 1; padding: 4px 8px; background: rgb(96, 100, 110, 0.37); color: rgb(201, 208, 211);
-            border: 1px solid rgb(72, 75, 91); border-radius: 5px; font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-            font-weight: 300; font-size: 13px; cursor: pointer;`;
-
-        ['hd720', 'hd1080', 'hd1440', 'hd2160'].forEach(q => {
+        const intensityRow = document.createElement('div');
+        intensityRow.className = 'bt-select-row';
+        intensityRow.style.padding = '0';
+        const intensityLabel = document.createElement('span');
+        intensityLabel.className = 'bt-select-label';
+        intensityLabel.textContent = 'Интенсивность:';
+        const intensitySelect = document.createElement('select');
+        intensitySelect.className = 'bt-select';
+        [
+            ['soft', 'Мягкая'],
+            ['strong', 'Выраженная']
+        ].forEach(([val, text]) => {
             const opt = document.createElement('option');
-            opt.value = q; opt.textContent = QUALITY_MAP[q];
-            opt.style.cssText = 'background: rgb(37, 37, 45); color: rgb(201, 208, 211);';
-            if (q === selectedQuality) opt.selected = true;
-            qualitySelect.appendChild(opt);
+            opt.value = val;
+            opt.textContent = text;
+            opt.selected = fontIntensity === val;
+            intensitySelect.appendChild(opt);
         });
-
-        qualitySelect.addEventListener('change', (e) => {
-            selectedQuality = e.target.value;
-            try { localStorage.setItem(QUALITY_KEY, selectedQuality); } catch (err) {}
-            if (settings.autoQuality) setPreferredQuality();
+        intensitySelect.addEventListener('change', () => {
+            fontIntensity = intensitySelect.value;
+            gmSet(FONT_INTENSITY_KEY, fontIntensity);
+            applyGlobalFont();
         });
-        qualityRow.appendChild(qualitySelect);
-        panel.appendChild(qualityRow);
+        uiRefs.intensitySelect = intensitySelect;
+        intensityRow.append(intensityLabel, intensitySelect);
+        fontCard.appendChild(intensityRow);
 
-        const speedRow = document.createElement('div');
-        speedRow.style.cssText = 'display:flex; align-items:center; gap:8px; margin:0 8px 6px; padding:4px 8px;';
-        const speedLabel = document.createElement('span'); speedLabel.textContent = 'Шаг скорости:';
-        speedLabel.style.cssText = 'font-size:13px; color:rgb(201,208,211);';
-        const speedSelect = document.createElement('select'); speedSelect.style.cssText = qualitySelect.style.cssText;
-        [{value:0.05,label:'0,05×'},{value:0.1,label:'0,1×'},{value:0.25,label:'0,25×'},{value:0.5,label:'0,5×'}].forEach(item => {
-            const option = document.createElement('option'); option.value = String(item.value); option.textContent = item.label;
-            option.style.cssText = 'background:rgb(37,37,45); color:rgb(201,208,211);';
-            if (item.value === speedStep) option.selected = true; speedSelect.appendChild(option);
-        });
-        speedSelect.addEventListener('change', () => { speedStep = Number(speedSelect.value); try { localStorage.setItem(SPEED_STEP_KEY, String(speedStep)); } catch (e) {} });
-        speedRow.appendChild(speedLabel); speedRow.appendChild(speedSelect); panel.appendChild(speedRow);
+        const excludeBtn = document.createElement('button');
+        excludeBtn.type = 'button';
+        excludeBtn.className = 'bt-btn';
+        excludeBtn.addEventListener('click', () => toggleFontExclusion(true));
+        uiRefs.excludeBtn = excludeBtn;
+        fontCard.appendChild(excludeBtn);
 
-        addFontControls(panel, qualitySelect.style.cssText);
+        const fontNote = document.createElement('div');
+        fontNote.className = 'bt-note';
+        fontNote.textContent = 'Действует на всех сайтах. Быстрое переключение для текущего домена: Alt + Shift + U.';
+        fontCard.appendChild(fontNote);
+        body.appendChild(fontCard);
 
-        const btnRow = document.createElement('div');
-        btnRow.style.cssText = 'display: flex; gap: 8px; margin: 12px 8px 0 8px;';
+        // Кнопки управления панелью
+        const actions = document.createElement('div');
+        actions.className = 'bt-actions';
 
-        const saveBtn = document.createElement('button');
-        saveBtn.id = 'retube-save'; saveBtn.textContent = 'Сохранить';
-        saveBtn.style.cssText = `flex: 1; padding: 8px 10px; background: rgb(96, 100, 110, 0.37); color: rgb(201, 208, 211);
-            border-radius: 5px; border: 1px solid rgb(72, 75, 91); font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-            font-weight: 300; font-size: 14px; cursor: pointer; transition: background 0.2s ease;`;
-        saveBtn.addEventListener('mouseenter', () => saveBtn.style.background = 'rgb(96, 100, 110, 0.6)');
-        saveBtn.addEventListener('mouseleave', () => saveBtn.style.background = 'rgb(96, 100, 110, 0.37)');
+        if (isYouTube) {
+            const resetBtn = document.createElement('button');
+            resetBtn.type = 'button';
+            resetBtn.className = 'bt-btn bt-btn-danger';
+            resetBtn.textContent = 'Сбросить';
+            resetBtn.addEventListener('click', () => {
+                ytSettings = Object.assign({}, DEFAULT_YT_SETTINGS);
+                selectedQuality = 'hd1080';
+                speedStep = 0.25;
+                gmSet(YT_SETTINGS_KEY, ytSettings);
+                gmSet(YT_QUALITY_KEY, selectedQuality);
+                gmSet(YT_SPEED_STEP_KEY, speedStep);
+                syncYouTubeFeatures();
+                syncYouTubeUI();
+                resetBtn.textContent = 'Сброшено ✓';
+                setTimeout(() => { resetBtn.textContent = 'Сбросить'; }, 1200);
+            });
+            actions.appendChild(resetBtn);
+        }
 
-        const resetBtn = document.createElement('button');
-        resetBtn.id = 'retube-reset'; resetBtn.textContent = 'Сбросить';
-        resetBtn.style.cssText = `flex:1; padding:8px 10px; background:rgba(120,80,80,0.32); color:rgb(230,215,215); border-radius:5px; border:1px solid rgba(150,95,95,0.55); font-family:"Ubuntu Light Custom","Ubuntu",sans-serif; font-size:14px; cursor:pointer;`;
         const closeBtn = document.createElement('button');
-        closeBtn.id = 'retube-close'; closeBtn.textContent = 'Закрыть';
-        closeBtn.style.cssText = `flex: 1; padding: 8px 10px; background: rgb(96, 100, 110, 0.37); color: rgb(201, 208, 211);
-            border-radius: 5px; border: 1px solid rgb(72, 75, 91); font-family: "Ubuntu Light Custom", "Ubuntu", sans-serif;
-            font-weight: 300; font-size: 14px; cursor: pointer; transition: background 0.2s ease;`;
-        closeBtn.addEventListener('mouseenter', () => closeBtn.style.background = 'rgb(96, 100, 110, 0.6)');
-        closeBtn.addEventListener('mouseleave', () => closeBtn.style.background = 'rgb(96, 100, 110, 0.37)');
+        closeBtn.type = 'button';
+        closeBtn.className = 'bt-btn';
+        closeBtn.textContent = 'Закрыть (Esc)';
+        closeBtn.addEventListener('click', () => closePanel());
+        actions.appendChild(closeBtn);
 
-        btnRow.appendChild(saveBtn); btnRow.appendChild(resetBtn); btnRow.appendChild(closeBtn); panel.appendChild(btnRow);
-        resetBtn.addEventListener('click', () => {
-            featureCheckboxes.forEach(([checkbox, key]) => {
-                settings[key] = checkbox.checked = false;
-                toggleFeature(key, false);
-            });
-            selectedQuality = 'hd1080';
-            speedStep = 0.25;
-            qualitySelect.value = selectedQuality; speedSelect.value = String(speedStep);
-            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); localStorage.setItem(QUALITY_KEY, selectedQuality); localStorage.setItem(SPEED_STEP_KEY, String(speedStep)); } catch (e) {}
-            resetBtn.textContent = 'Сброшено ✓'; setTimeout(() => { resetBtn.textContent = 'Сбросить'; }, 1200);
-        });
-        document.body.appendChild(panel);
-        makeDraggable(panel, header);
+        body.appendChild(actions);
+        panelEl.appendChild(body);
+        root.appendChild(panelEl);
 
-        featureCheckboxes.forEach(([checkbox, key]) => {
-            checkbox.addEventListener('change', e => {
-                settings[key] = e.target.checked;
-                toggleFeature(key, e.target.checked);
-                try { localStorage.setItem(STORAGE_KEY, JSON.stringify(settings)); } catch (err) {}
-            });
-        });
-
-        saveBtn.addEventListener('click', () => {
-            try {
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
-                localStorage.setItem(QUALITY_KEY, selectedQuality);
-                localStorage.setItem(SPEED_STEP_KEY, String(speedStep));
-                saveBtn.textContent = 'Сохранено ✓';
-                setTimeout(() => { saveBtn.textContent = 'Сохранить'; }, 1200);
-            } catch (e) {}
-        });
-
-        closeBtn.addEventListener('click', () => { panel.style.display = 'none'; hideTooltip(); });
+        syncFontUI();
+        syncYouTubeUI();
+        makeDraggable(panelEl, header);
+        return panelEl;
     }
 
-    window.addEventListener('keydown', (e) => {
-        if (e.key === 'F2') {
+    function togglePanel() {
+        const panel = ensureSettingsPanel();
+        if (!panel) return;
+        const willOpen = !panel.classList.contains('open');
+        if (willOpen) {
+            syncFontUI();
+            syncYouTubeUI();
+            panel.classList.add('open');
+            clampPanelPosition();
+        } else {
+            closePanel();
+        }
+    }
+
+    function closePanel() {
+        if (panelEl) panelEl.classList.remove('open');
+        hideTooltip();
+    }
+
+    // ==========================================
+    // 6. ГЛОБАЛЬНЫЕ ХОТКЕИ, МЕНЮ И СИНХРОНИЗАЦИЯ
+    // ==========================================
+
+    window.addEventListener('keydown', e => {
+        if (e.altKey && e.shiftKey && e.code === 'KeyU' && !e.repeat && !e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            let panel = document.getElementById('retube-settings-panel');
-            if (!panel) { createSettingsPanel(); panel = document.getElementById('retube-settings-panel'); }
-            if (panel) {
-                panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-                if (panel.style.display === 'none') hideTooltip();
-            }
+            toggleFontExclusion(true);
+            return;
         }
-        if (e.key === 'Escape') {
-            const panel = document.getElementById('retube-settings-panel');
-            if (panel) panel.style.display = 'none';
-            hideTooltip();
+        if (e.key === 'F2' && !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey) {
+            e.preventDefault();
+            togglePanel();
+            return;
         }
+        if (e.key === 'Escape' && panelEl && panelEl.classList.contains('open')) {
+            closePanel();
+        }
+    }, true);
+
+    window.addEventListener('resize', () => {
+        if (panelEl && panelEl.classList.contains('open')) clampPanelPosition();
     });
 
-    function applySavedSettings() {
-        if (settings.smoothAnim) applySmoothAnimations();
-        if (settings.hideElements) applyHideElementsCSS();
-        if (settings.wheelSpeed) applyWheelSpeed();
-        if (settings.translateComments) applyTranslateComments();
-        if (settings.compactMode) applyCompactMode();
-        if (settings.autoQuality) applyAutoQuality();
-        if (settings.speedHotkeys) applySpeedHotkeys();
+    if (typeof GM_registerMenuCommand === 'function') {
+        try {
+            GM_registerMenuCommand('Открыть / закрыть панель настроек (F2)', () => togglePanel());
+            GM_registerMenuCommand('Вкл / выкл Ubuntu Light на этом сайте (Alt+Shift+U)', () => toggleFontExclusion(true));
+        } catch (_) {}
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => { createSettingsPanel(); applySavedSettings(); });
-    } else {
-        createSettingsPanel(); applySavedSettings();
+    if (typeof GM_addValueChangeListener === 'function') {
+        try {
+            GM_addValueChangeListener(FONT_EXCLUDED_KEY, (_k, _oldV, _newV, remote) => {
+                if (!remote) return;
+                applyGlobalFont();
+                syncFontUI();
+            });
+            GM_addValueChangeListener(FONT_INTENSITY_KEY, (_k, _oldV, newV, remote) => {
+                if (!remote) return;
+                if (newV === 'soft' || newV === 'strong') fontIntensity = newV;
+                applyGlobalFont();
+                syncFontUI();
+            });
+            if (isYouTube) {
+                GM_addValueChangeListener(YT_SETTINGS_KEY, (_k, _oldV, newV, remote) => {
+                    if (!remote || !newV || typeof newV !== 'object') return;
+                    ytSettings = Object.assign({}, DEFAULT_YT_SETTINGS, newV);
+                    syncYouTubeFeatures();
+                    syncYouTubeUI();
+                });
+                GM_addValueChangeListener(YT_QUALITY_KEY, (_k, _oldV, newV, remote) => {
+                    if (!remote || !QUALITY_MAP[newV]) return;
+                    selectedQuality = newV;
+                    syncYouTubeUI();
+                    if (ytSettings.autoQuality) setPreferredQuality();
+                });
+                GM_addValueChangeListener(YT_SPEED_STEP_KEY, (_k, _oldV, newV, remote) => {
+                    const num = Number(newV);
+                    if (!remote || ![0.05, 0.1, 0.25, 0.5].includes(num)) return;
+                    speedStep = num;
+                    syncYouTubeUI();
+                });
+            }
+        } catch (_) {}
     }
 
+    if (isYouTube) {
+        const initYouTube = () => syncYouTubeFeatures();
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initYouTube, { once: true });
+        } else {
+            initYouTube();
+        }
+    }
 })();
